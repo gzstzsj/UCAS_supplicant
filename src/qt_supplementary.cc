@@ -64,6 +64,8 @@ void QMain::set_off_layout()
     main_layout->addWidget(&passWordPrompt,0,Qt::AlignTop);
     main_layout->addWidget(&passWord,0,Qt::AlignTop);
     main_layout->addWidget(&submit,1,Qt::AlignTop);
+    userName.setReadOnly(false);
+    passWord.setReadOnly(false);
     userNamePrompt.setVisible(1);
     storeUname.setVisible(1);
     userName.setVisible(1);
