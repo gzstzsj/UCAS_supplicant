@@ -21,10 +21,7 @@ int read_info_1(const char*, char*, int);
 int read_info_2(const char*, char*, int);
 int read_info_3(const char*, char*, int);
 int get_ret_code(const char*);
-//QString read_info_gumbo_1(char*);
-//int read_info_bare_1(char*);
 
-//int get_success(void);
 int login(void);
 int logout(void);
 int getflow(void);

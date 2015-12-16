@@ -22,41 +22,36 @@ class QMain : public QWidget
 public:
     QMain(){}
 
+    void initialize();
+    int check_state();
+
     static void *login(void *arg);
     void login_thread();
     static void *logout(void *arg);
     void logout_thread();
-
-    void initialize();
     void getflow_thread();
     static void *getflow(void *arg);
     void st_keep_alive();
     static void *keep_alive(void *arg);
-    //int check_state_thread();
-    int check_state();
+
     void get_info_1_thread();
     void get_info_2_thread();
     void get_info_3_thread();
     static void *get_info_1(void *arg);
     static void *get_info_2(void *arg);
     static void *get_info_3(void *arg);
+
     void set_off_layout();
     void set_on_layout();
     void del_off_layout();
     void del_on_layout();
+
     void set_remu(int remu)
     {
         remuname = remu;
     }
 
     int get_confirmed;
-
-    /*
-    void build_message(const QString message_str)
-    {
-        message_server = new QString(message_str);
-    }
-    */
 
     void send()
     {
@@ -82,14 +77,6 @@ public:
     {
         emit login_fail();
     }
-
-    /*
-    void destroy_message()
-    {
-        if (message_server != NULL)
-            delete message_server;
-    }
-    */
 
 signals:
     void display_message(const QString & message);
@@ -162,16 +149,5 @@ private:
     }
 
 };
-
-/*
-class QSuppWindow : public QWidget
-{
-    Q_OBJECT
-signals:
-    void supp_closed();
-protected:
-    void closeEvent(QCloseEvent *event) Q_DECL_OVERRIDE;
-};
-*/
 
 #endif

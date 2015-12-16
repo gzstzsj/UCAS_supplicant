@@ -24,7 +24,6 @@ void QMain::initialize()
     info_display_scroll.setWidgetResizable(true);
     info_display_scroll.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     info_display.setWordWrap(true);
-    //info_display.setMinimumSize(100,250);
     info_display.setAlignment(Qt::AlignTop);
     info_display.setIndent(-30);
     get_confirmed = 0;
@@ -82,7 +81,6 @@ void QMain::set_on_layout()
 {
     main_layout = new QVBoxLayout;
     main_layout->addWidget(&rem_flow,0,Qt::AlignTop);
-    //main_layout->addWidget(&info_display_scroll,100,Qt::AlignTop);
     main_layout->addWidget(&info_display_scroll,0,0);
     main_layout->addWidget(&submit_dis,0,Qt::AlignBottom);
     main_layout->addLayout(&info_area);
@@ -201,9 +199,3 @@ void QMain::st_keep_alive()
     pthread_create(&tid, NULL, keep_alive, (void*)this);
     pthread_detach(tid);
 }
-/*
-void QSuppWindow::closeEvent(QCloseEvent *event)
-{
-    emit supp_closed();
-}
-*/

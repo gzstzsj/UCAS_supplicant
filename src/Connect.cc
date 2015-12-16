@@ -352,7 +352,6 @@ void *QMain::keep_alive(void *arg)
 
     if (fake_this->isOffline == 2)
     {
-        //fake_this->build_message("Connection Lost");
         fake_this->message_server = QString("Connection Lost");
         fake_this->send();
         fake_this->send_logoff_success();
@@ -388,7 +387,6 @@ static int get_confirm(void *arg)
         return -2;
     }
     pthread_mutex_unlock(&recv_lock);
-    //get_info_test(arg);
     return 0;
 }
 
@@ -398,7 +396,6 @@ void *QMain::get_info_1(void *arg)
     QMain *fake_this = (QMain*)arg;
 
     while (fake_this->get_confirmed == 0)
-        //nanosleep(&wait_time, NULL);
         get_confirm(arg);
 
     /* Prepare Post Field for Info Request */
@@ -415,7 +412,6 @@ void *QMain::get_info_1(void *arg)
     }
     pthread_mutex_unlock(&recv_lock);
     pthread_mutex_unlock(&post_lock);
-    //fake_this->show_info(info_text);
     return NULL;
 }
 
@@ -425,7 +421,6 @@ void *QMain::get_info_2(void *arg)
     QMain *fake_this = (QMain*)arg;
 
     while (fake_this->get_confirmed == 0)
-        //nanosleep(&wait_time, NULL);
         get_confirm(arg);
 
     /* Prepare Post Field for Info Request */
@@ -442,7 +437,6 @@ void *QMain::get_info_2(void *arg)
     }
     pthread_mutex_unlock(&recv_lock);
     pthread_mutex_unlock(&post_lock);
-    //fake_this->show_info(info_text);
     return NULL;
 }
 
@@ -452,7 +446,6 @@ void *QMain::get_info_3(void *arg)
     QMain *fake_this = (QMain*)arg;
 
     while (fake_this->get_confirmed == 0)
-        //nanosleep(&wait_time, NULL);
         get_confirm(arg);
 
     /* Prepare Post Field for Info Request */
@@ -469,7 +462,6 @@ void *QMain::get_info_3(void *arg)
     }
     pthread_mutex_unlock(&recv_lock);
     pthread_mutex_unlock(&post_lock);
-    //fake_this->show_info(info_text);
     return NULL;
 }
 
@@ -496,7 +488,6 @@ void *QMain::login(void *arg)
         return NULL;
     }
     char *loginpost;
-    //int need_success = 1;
     urlencode(username_raw, username_t);
     urlencode(password_raw, password_t);
     lenuname = strlen(username_t);
@@ -558,7 +549,6 @@ void *QMain::login(void *arg)
             pthread_mutex_unlock(&recv_lock);
 	        if (strcmp(result, success) != 0) 
             {
-                //fake_this->build_message(messages);
                 fake_this->message_server = QString(messages);
                 fake_this->send();
                 fake_this->send_fail();
@@ -568,10 +558,6 @@ void *QMain::login(void *arg)
                 fake_this->isOffline = 0;
 	            if (get_success() != 0)
                     gfflag = 0;
-                /*
-                    fake_this->del_off_layout();
-                    fake_this->set_on_layout();
-                    */
                  fake_this->send_success();
             }
 	    }
@@ -591,15 +577,6 @@ void *QMain::login(void *arg)
 	free(loginpost);
     fake_this->retcode = -2;
     return NULL;
-    //else {
-        /* Request userIndex From Server */
-    /*
-        if (getIndex((const char*)receiveline) != 0) {
-            return -3;
-        }
-        return 1;
-    }
-    */
 }
 
 void *QMain::logout(void *arg)
@@ -630,17 +607,12 @@ void *QMain::logout(void *arg)
         fake_this->isOffline = 1;
         if ( readMessages((const char*)receiveline) == 0)
         {
-            //fake_this->build_message(messages);
             fake_this->message_server = QString(messages);
             fake_this->send();
         }
         pthread_mutex_unlock(&recv_lock);
         pthread_mutex_unlock(&post_lock);
         fake_this->send_logoff_success();
-        /*
-        fake_this->del_on_layout();
-        fake_this->set_off_layout();
-        */
         fake_this->retcode = 0;
         fake_this->get_confirmed = 0;
         return NULL;
@@ -660,7 +632,6 @@ void *QMain::getflow(void *arg)
     unsigned int post_len_temp;
     int tmp;
     int ret;
-    //messages[0] = '\0';
     flow_text[0] = '\0';
 
     /* Prepare Post Field for GetOnlineUserInfo */

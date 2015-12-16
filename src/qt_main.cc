@@ -17,10 +17,6 @@ int main(int argc, char *argv[])
     main_window.set_off_layout();
 
     q_state = main_window.check_state();
-    /*
-    else 
-        QDebug("Problem Connecting to Server!");
-        */
 
     // supplementary window layout
     QWidget supp_window;
@@ -40,7 +36,6 @@ int main(int argc, char *argv[])
     QObject::connect(&main_window, &QMain::display_message, message_text, &QLabel::setText);
     QObject::connect(&main_window, &QMain::display_message, &supp_window, &QWidget::show);
     QObject::connect(message_exit, &QPushButton::clicked, &supp_window, &QWidget::hide);
-    //QObject::connect(&supp_window, &QSuppWindow::supp_closed, &main_window, &QMain::destroy_message);
     main_window.show();
 
     if (q_state == 1)
