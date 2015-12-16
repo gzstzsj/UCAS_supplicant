@@ -14,4 +14,4 @@
 
 ## Installation
 
-Run `qmake` then `make`.
+Run `qmake` (possibly `qmake-qt5`) then `make`.
