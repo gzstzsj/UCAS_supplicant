@@ -30,6 +30,7 @@ extern char infoString[];
 extern char jsessionid[];
 extern char info_text[];
 
+static char flow_text[25];
 static const char* HTTP_HEADER_LOGOUT = "POST /eportal/InterFace.do?method=logout HTTP/1.1\r\nHost: 210.77.16.21\r\nUser-Agent: \
 Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.85 Safari/537.36\r\n\
 Content-Type: application/x-www-form-urlencoded\r\nContent-Length: ";
@@ -93,6 +94,8 @@ static const uint16_t BAIDU_PORT = 80;
 static char receiveline[MAXLINE+1];
 static pthread_mutex_t recv_lock;
 static char receiveline_keep[MAXLINE+1];
+static int active_keep;
+static pthread_mutex_t keep_lock;
 
 static char to_hex(char code) 
 {
@@ -319,6 +322,9 @@ void *QMain::keep_alive(void *arg)
     QMain *fake_this = (QMain*)arg;
     int p;
 
+    pthread_mutex_lock(&keep_lock);
+    ++ active_keep;
+    pthread_mutex_unlock(&keep_lock);
     /* Prepare Post Field for Keepalive */
     while ( fake_this->isOffline == 0 )
     {
@@ -334,14 +340,26 @@ void *QMain::keep_alive(void *arg)
             continue;
         }
         sleep(30);
+        pthread_mutex_lock(&keep_lock);
+        if (active_keep > 1)
+        {
+            -- active_keep;
+            pthread_mutex_unlock(&keep_lock);
+            return NULL;
+        }
+        pthread_mutex_unlock(&keep_lock);
     }
 
     if (fake_this->isOffline == 2)
     {
+        //fake_this->build_message("Connection Lost");
         fake_this->message_server = QString("Connection Lost");
         fake_this->send();
         fake_this->send_logoff_success();
     }
+    pthread_mutex_lock(&keep_lock);
+    -- active_keep;
+    pthread_mutex_unlock(&keep_lock);
     return NULL;
 }
 
@@ -466,6 +484,7 @@ void *QMain::login(void *arg)
     {
         fake_this->retcode = -10;
         printf("Failed to malloc memory!\n");
+        return NULL;
     }
     const char* password_raw = fake_this->password.data();
     char* password_t = (char*)malloc((strlen(password_raw)*5 + 1)*sizeof(char));
@@ -473,6 +492,8 @@ void *QMain::login(void *arg)
     {
         fake_this->retcode = -10;
         printf("Failed to malloc memory!\n");
+        free(username_t);
+        return NULL;
     }
     char *loginpost;
     //int need_success = 1;
@@ -484,11 +505,14 @@ void *QMain::login(void *arg)
 
     /* Request queryString From Server */
     pthread_mutex_lock(&recv_lock);
-    if (http_req(HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 1) != 0) 
+    if (http_req(HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 0) != 0) 
     {
         pthread_mutex_unlock(&recv_lock);
         fake_this->retcode = -1;
         fake_this->send_fail();
+        memset(password_t, 1, lenpword);
+        free(username_t);
+        free(password_t);
         return NULL;
     }
     if (readQuery((const char*)receiveline) != 0)
@@ -509,12 +533,17 @@ void *QMain::login(void *arg)
 	if (loginpost == NULL) {
         fake_this->retcode = -1;
         fake_this->send_fail();
+        memset(password_t, 1, lenpword);
+        free(username_t);
+        free(password_t);
         return NULL;
 	}
-	(void)snprintf(loginpost, total_len+1, "%s%d%s%s%s%s%s%s", HTTP_HEADER_LOGIN,\
+	total_len = snprintf(loginpost, total_len+1, "%s%d%s%s%s%s%s%s", HTTP_HEADER_LOGIN,\
 	        post_len, part1, username_t, part2, password_t, part3, queryString);
 
     memset(password_t, 1, lenpword);
+    free(username_t);
+    free(password_t);
 	
 	result[0] = '\0';
 	messages[0] = '\0';
@@ -529,7 +558,8 @@ void *QMain::login(void *arg)
             pthread_mutex_unlock(&recv_lock);
 	        if (strcmp(result, success) != 0) 
             {
-                fake_this->message_server = QString((messages));
+                //fake_this->build_message(messages);
+                fake_this->message_server = QString(messages);
                 fake_this->send();
                 fake_this->send_fail();
             }
@@ -546,8 +576,10 @@ void *QMain::login(void *arg)
             }
 	    }
         else 
+        {
             fake_this->send_fail();
-        pthread_mutex_unlock(&recv_lock);
+            pthread_mutex_unlock(&recv_lock);
+        }
 	    memset(loginpost, 0, total_len);
 	    free(loginpost);
         fake_this->retcode = 0;
@@ -598,7 +630,8 @@ void *QMain::logout(void *arg)
         fake_this->isOffline = 1;
         if ( readMessages((const char*)receiveline) == 0)
         {
-            fake_this->message_server = QString((messages));
+            //fake_this->build_message(messages);
+            fake_this->message_server = QString(messages);
             fake_this->send();
         }
         pthread_mutex_unlock(&recv_lock);
@@ -625,10 +658,9 @@ void *QMain::getflow(void *arg)
     if (gfflag == 0) return NULL;
     unsigned int total_len, post_len;
     unsigned int post_len_temp;
-    char flow_text[25];
     int tmp;
     int ret;
-    messages[0] = '\0';
+    //messages[0] = '\0';
     flow_text[0] = '\0';
 
     /* Prepare Post Field for GetOnlineUserInfo */
@@ -646,7 +678,7 @@ void *QMain::getflow(void *arg)
 
     /* Send HTTP Request and Process the Response */
     pthread_mutex_lock(&recv_lock);
-    if (http_req(postfield, total_len, receiveline, MAXLINE, 1) == 0)
+    if (http_req(postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         pthread_mutex_unlock(&post_lock);
         if ( (ret = readFlow((const char*)receiveline)) == 0)
@@ -663,15 +695,20 @@ void *QMain::getflow(void *arg)
                 fake_this->get_confirmed = 1;
             }
         }
-        pthread_mutex_unlock(&recv_lock);
+        else
+            pthread_mutex_unlock(&recv_lock);
     }
-    pthread_mutex_unlock(&recv_lock);
-    pthread_mutex_unlock(&post_lock);
+    else 
+    {
+        pthread_mutex_unlock(&recv_lock);
+        pthread_mutex_unlock(&post_lock);
+    }
     return NULL;
 }
 
 int QMain::check_state()
 {
+    active_keep = 0;
     /* Request queryString From Server */
     pthread_mutex_init(&post_lock, NULL);
     pthread_mutex_init(&recv_lock, NULL);

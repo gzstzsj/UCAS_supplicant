@@ -39,7 +39,8 @@ int main(int argc, char *argv[])
     // on click of connect
     QObject::connect(&main_window, &QMain::display_message, message_text, &QLabel::setText);
     QObject::connect(&main_window, &QMain::display_message, &supp_window, &QWidget::show);
-    QObject::connect(message_exit, &QPushButton::clicked, &supp_window, &QWidget::close);
+    QObject::connect(message_exit, &QPushButton::clicked, &supp_window, &QWidget::hide);
+    //QObject::connect(&supp_window, &QSuppWindow::supp_closed, &main_window, &QMain::destroy_message);
     main_window.show();
 
     if (q_state == 1)

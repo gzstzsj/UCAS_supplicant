@@ -51,6 +51,13 @@ public:
 
     int get_confirmed;
 
+    /*
+    void build_message(const QString message_str)
+    {
+        message_server = new QString(message_str);
+    }
+    */
+
     void send()
     {
         emit display_message(message_server);
@@ -75,6 +82,14 @@ public:
     {
         emit login_fail();
     }
+
+    /*
+    void destroy_message()
+    {
+        if (message_server != NULL)
+            delete message_server;
+    }
+    */
 
 signals:
     void display_message(const QString & message);
@@ -147,5 +162,16 @@ private:
     }
 
 };
+
+/*
+class QSuppWindow : public QWidget
+{
+    Q_OBJECT
+signals:
+    void supp_closed();
+protected:
+    void closeEvent(QCloseEvent *event) Q_DECL_OVERRIDE;
+};
+*/
 
 #endif

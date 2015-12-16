@@ -28,6 +28,7 @@ void QMain::initialize()
     info_display.setAlignment(Qt::AlignTop);
     info_display.setIndent(-30);
     get_confirmed = 0;
+    remuname = 0;
 
     // Part of Layout
     username_title.addWidget(&userNamePrompt, 0, Qt::AlignLeft);
@@ -46,8 +47,8 @@ void QMain::initialize()
     QObject::connect(&passWord, &QLineEdit::returnPressed, &submit, &QPushButton::click);
     QObject::connect(&submit, &QPushButton::clicked, this, &QMain::login_thread);
     QObject::connect(&submit_dis, &QPushButton::clicked, this, &QMain::logout_thread);
-    QObject::connect(&userName, &QLineEdit::textChanged, this, &QMain::get_username);
-    QObject::connect(&passWord, &QLineEdit::textChanged, this, &QMain::get_password);
+    QObject::connect(&userName, &QLineEdit::textEdited, this, &QMain::get_username);
+    QObject::connect(&passWord, &QLineEdit::textEdited, this, &QMain::get_password);
     QObject::connect(&combo, &QPushButton::clicked, this, &QMain::get_info_1_thread);
     QObject::connect(&flow, &QPushButton::clicked, this, &QMain::get_info_2_thread);
     QObject::connect(&device, &QPushButton::clicked, this, &QMain::get_info_3_thread);
@@ -150,36 +151,42 @@ void QMain::login_thread()
     passWord.setReadOnly(true);
     pthread_t tid;
     pthread_create(&tid, NULL, login, (void*)this);
+    pthread_detach(tid);
 }
 
 void QMain::logout_thread()
 {
     pthread_t tid;
     pthread_create(&tid, NULL, logout, (void*)this);
+    pthread_detach(tid);
 }
 
 void QMain::getflow_thread()
 {
     pthread_t tid;
     pthread_create(&tid, NULL, getflow, (void*)this);
+    pthread_detach(tid);
 }
 
 void QMain::get_info_1_thread()
 {
     pthread_t tid;
     pthread_create(&tid, NULL, get_info_1, (void*)this);
+    pthread_detach(tid);
 }
 
 void QMain::get_info_2_thread()
 {
     pthread_t tid;
     pthread_create(&tid, NULL, get_info_2, (void*)this);
+    pthread_detach(tid);
 }
 
 void QMain::get_info_3_thread()
 {
     pthread_t tid;
     pthread_create(&tid, NULL, get_info_3, (void*)this);
+    pthread_detach(tid);
 }
 
 void QMain::show_info()
@@ -192,4 +199,11 @@ void QMain::st_keep_alive()
 {
     pthread_t tid;
     pthread_create(&tid, NULL, keep_alive, (void*)this);
+    pthread_detach(tid);
 }
+/*
+void QSuppWindow::closeEvent(QCloseEvent *event)
+{
+    emit supp_closed();
+}
+*/
