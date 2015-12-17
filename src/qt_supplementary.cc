@@ -20,14 +20,15 @@ void QMain::initialize()
     flow.setMinimumHeight(40);
     device.setText("Devices\nOnline");
     device.setMinimumHeight(40);
-    info_display_scroll.setWidget(&info_display);
-    info_display_scroll.setWidgetResizable(true);
-    info_display_scroll.setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    info_display.setWordWrap(true);
-    info_display.setAlignment(Qt::AlignTop);
-    info_display.setIndent(-30);
+    info_display = NULL;
     get_confirmed = 0;
     remuname = 0;
+
+    //Font
+    font.setPointSize(9);
+    combo.setFont(font);
+    flow.setFont(font);
+    device.setFont(font);
 
     // Part of Layout
     username_title.addWidget(&userNamePrompt, 0, Qt::AlignLeft);
@@ -87,7 +88,6 @@ void QMain::set_on_layout()
     getflow_thread();
     rem_flow.setVisible(1);
     info_display_scroll.setVisible(1);
-    info_display.setVisible(1);
     submit_dis.setVisible(1);
     combo.setVisible(1);
     flow.setVisible(1);
@@ -128,8 +128,11 @@ void QMain::del_on_layout()
         main_layout->removeItem(&info_area);
         rem_flow.setVisible(0);
         info_display_scroll.setVisible(0);
-        info_display.setVisible(0);
-        info_display.setText("");
+        if (info_display != NULL)
+        {
+            delete info_display;
+            info_display = NULL;
+        }
         submit_dis.setVisible(0);
         combo.setVisible(0);
         flow.setVisible(0);
@@ -189,8 +192,16 @@ void QMain::get_info_3_thread()
 
 void QMain::show_info()
 {
-    //info_display.setText(QString("<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; text-indent:20px;\">").append(info_str).append("</p>"));
-    info_display.setText(info_text);
+    if (info_display != NULL)
+    {
+        delete info_display;
+        info_display = NULL;
+    }
+    info_display = new QLabel(info_text, &(this->info_display_scroll));
+    info_display->setFont(font);
+    info_display->setWordWrap(true);
+    info_display_scroll.setWidget(info_display);
+    info_display_scroll.setWidgetResizable(true);
 }
 
 void QMain::st_keep_alive()
@@ -198,4 +209,45 @@ void QMain::st_keep_alive()
     pthread_t tid;
     pthread_create(&tid, NULL, keep_alive, (void*)this);
     pthread_detach(tid);
+}
+
+void QSuppWindow::showup(const QString & msg)
+{
+    if (opened)
+    {
+        basic.removeWidget(&exit_button);
+        basic.removeWidget(message);
+    }
+    if (message != NULL) 
+    {
+        delete message;
+        message = NULL;
+    }
+    message = new QLabel(msg, this);
+    basic.addWidget(message, 0, Qt::AlignCenter);
+    basic.addWidget(&exit_button, 0, Qt::AlignCenter);
+    opened = 1;
+}
+
+void QSuppWindow::closeEvent(QCloseEvent *event)
+{
+    basic.removeWidget(&exit_button);
+    basic.removeWidget(message);
+    if (message != NULL) 
+    {
+        delete message;
+        message = NULL;
+    }
+    opened = 0;
+}
+
+void QSuppWindow::initialize()
+{
+    opened = 0;
+    message = NULL;
+    setWindowTitle("Message");
+    setMinimumSize(100,100);
+    exit_button.setText("Close");
+    setLayout(&basic);
+    QObject::connect(&exit_button, &QPushButton::clicked, this, &QSuppWindow::close);
 }

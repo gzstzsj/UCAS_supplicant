@@ -19,23 +19,12 @@ int main(int argc, char *argv[])
     q_state = main_window.check_state();
 
     // supplementary window layout
-    QWidget supp_window;
-    supp_window.setWindowTitle("Message");
-    supp_window.setMinimumSize(100,100);
-
-    QLabel *message_text = new QLabel(&supp_window);
-    QPushButton *message_exit = new QPushButton("Close", &supp_window);
-
-    QVBoxLayout *layout_supp = new QVBoxLayout;
-    layout_supp->addWidget(message_text,0,Qt::AlignCenter);
-    layout_supp->addWidget(message_exit,0,Qt::AlignCenter);
-
-    supp_window.setLayout(layout_supp);
+    QSuppWindow supp_window;
+    supp_window.initialize();
 
     // on click of connect
-    QObject::connect(&main_window, &QMain::display_message, message_text, &QLabel::setText);
-    QObject::connect(&main_window, &QMain::display_message, &supp_window, &QWidget::show);
-    QObject::connect(message_exit, &QPushButton::clicked, &supp_window, &QWidget::hide);
+    QObject::connect(&main_window, &QMain::display_message, &supp_window, &QSuppWindow::showup);
+    QObject::connect(&main_window, &QMain::display_message, &supp_window, &QSuppWindow::show);
     main_window.show();
 
     if (q_state == 1)

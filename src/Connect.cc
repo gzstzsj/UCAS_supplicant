@@ -15,7 +15,6 @@
 #include "../include/qt_extended.hh"
 
 #define INCRE 16
-#define UNAMELEN 20
 #define POSTFIELDOFFSET 10
 
 extern struct flow flow_current;
@@ -352,7 +351,7 @@ void *QMain::keep_alive(void *arg)
 
     if (fake_this->isOffline == 2)
     {
-        fake_this->message_server = QString("Connection Lost");
+        snprintf(fake_this->message_server, 16, "Connection lost");
         fake_this->send();
         fake_this->send_logoff_success();
     }
@@ -470,26 +469,60 @@ void *QMain::login(void *arg)
     QMain *fake_this = (QMain*) arg;
     unsigned int lenuname;
     unsigned int lenpword;
-    char* username_raw = fake_this->username.data();
-    char* username_t = (char*)malloc((strlen(username_raw)*5 + 1)*sizeof(char));
-    if (username_t == NULL)
+    char *username_t, *password_t;
+
+    char *username_raw, *password_raw; 
+    if ( fake_this->userName.text().isEmpty() )
     {
-        fake_this->retcode = -10;
-        printf("Failed to malloc memory!\n");
-        return NULL;
+        username_t = (char*)malloc(1);
+        if (username_t == NULL)
+        {
+            fake_this->retcode = -10;
+            printf("Failed to malloc memory!\n");
+            return NULL;
+        }
+        *username_t = '\0';
     }
-    const char* password_raw = fake_this->password.data();
-    char* password_t = (char*)malloc((strlen(password_raw)*5 + 1)*sizeof(char));
-    if (password_t == NULL)
+    else 
     {
-        fake_this->retcode = -10;
-        printf("Failed to malloc memory!\n");
-        free(username_t);
-        return NULL;
+        username_raw = fake_this->username.data();
+        username_t = (char*)malloc((strlen(username_raw)*5 + 1)*sizeof(char));
+        if (username_t == NULL)
+        {
+            fake_this->retcode = -10;
+            printf("Failed to malloc memory!\n");
+            return NULL;
+        }
+        urlencode(username_raw, username_t);
     }
+
+    if ( fake_this->userName.text().isEmpty() )
+    {
+        password_t = (char*)malloc(1);
+        if (password_t == NULL)
+        {
+            fake_this->retcode = -10;
+            printf("Failed to malloc memory!\n");
+            free(username_t);
+            return NULL;
+        }
+        *password_t = '\0';
+    }
+    else 
+    {
+        password_raw = fake_this->password.data();
+        password_t = (char*)malloc((strlen(password_raw)*5 + 1)*sizeof(char));
+        if (password_t == NULL)
+        {
+            fake_this->retcode = -10;
+            printf("Failed to malloc memory!\n");
+            free(username_t);
+            return NULL;
+        }
+        urlencode(password_raw, password_t);
+    }
+
     char *loginpost;
-    urlencode(username_raw, username_t);
-    urlencode(password_raw, password_t);
     lenuname = strlen(username_t);
     lenpword = strlen(password_t);
     unsigned int total_len, total_len_temp, post_len;
@@ -549,7 +582,7 @@ void *QMain::login(void *arg)
             pthread_mutex_unlock(&recv_lock);
 	        if (strcmp(result, success) != 0) 
             {
-                fake_this->message_server = QString(messages);
+                strncpy(fake_this->message_server, messages, 100);
                 fake_this->send();
                 fake_this->send_fail();
             }
@@ -607,7 +640,7 @@ void *QMain::logout(void *arg)
         fake_this->isOffline = 1;
         if ( readMessages((const char*)receiveline) == 0)
         {
-            fake_this->message_server = QString(messages);
+            strncpy(fake_this->message_server, messages, 100);
             fake_this->send();
         }
         pthread_mutex_unlock(&recv_lock);
@@ -684,7 +717,7 @@ int QMain::check_state()
     pthread_mutex_init(&post_lock, NULL);
     pthread_mutex_init(&recv_lock, NULL);
     pthread_mutex_lock(&recv_lock);
-    if (http_req(HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 1) != 0) 
+    if (http_req(HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 0) != 0) 
     {
         pthread_mutex_unlock(&recv_lock);
         isOffline = 1;

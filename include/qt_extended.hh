@@ -22,30 +22,27 @@ class QMain : public QWidget
 public:
     QMain(){}
 
-    void initialize();
-    int check_state();
-
     static void *login(void *arg);
     void login_thread();
     static void *logout(void *arg);
     void logout_thread();
+
+    void initialize();
     void getflow_thread();
     static void *getflow(void *arg);
     void st_keep_alive();
     static void *keep_alive(void *arg);
-
+    int check_state();
     void get_info_1_thread();
     void get_info_2_thread();
     void get_info_3_thread();
     static void *get_info_1(void *arg);
     static void *get_info_2(void *arg);
     static void *get_info_3(void *arg);
-
     void set_off_layout();
     void set_on_layout();
     void del_off_layout();
     void del_on_layout();
-
     void set_remu(int remu)
     {
         remuname = remu;
@@ -93,7 +90,7 @@ private:
     int isOffline;
     int retcode;
     int remuname;
-    QString message_server;
+    char message_server[100];
     QByteArray username;
     QByteArray password;
 
@@ -113,10 +110,12 @@ private:
     QPushButton flow;
     QPushButton device;
     QScrollArea info_display_scroll;
-    QLabel info_display;
+    QLabel *info_display;
     QLabel rem_flow;
 
     QVBoxLayout *main_layout;
+
+    QFont font;
 
     void show_info();
 
@@ -148,6 +147,21 @@ private:
         passWord.setReadOnly(false);
     }
 
+};
+
+class QSuppWindow : public QWidget
+{
+    Q_OBJECT
+public:
+    void initialize();
+    void showup(const QString & msg);
+protected:
+    void closeEvent(QCloseEvent *event) Q_DECL_OVERRIDE;
+private:
+    QLabel* message;
+    QVBoxLayout basic;
+    QPushButton exit_button;
+    int opened;
 };
 
 #endif

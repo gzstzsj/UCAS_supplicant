@@ -33,13 +33,6 @@ static const char* MES = "message\"";
 static const char* UID = "userIndex\"";
 static const char* XQINFO = "套餐详情";
 
-QString gbk2utf(const QString &input)
-{
-    QTextCodec *gbk = QTextCodec::codecForName("GB18030");
-    QTextCodec *utf = QTextCodec::codecForName("UTF-8");
-    return gbk->toUnicode(utf->fromUnicode(input));
-}
-
 void trim(char* totrim)
 {
     const char* rdptr = totrim;
