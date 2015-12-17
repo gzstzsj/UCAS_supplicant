@@ -151,6 +151,7 @@ private:
     {
         userName.setReadOnly(false);
         passWord.setReadOnly(false);
+        sent_login = 0;
     }
 
 };
