@@ -200,6 +200,7 @@ void QMain::show_info()
     info_display = new QLabel(info_text, &(this->info_display_scroll));
     info_display->setFont(font);
     info_display->setWordWrap(true);
+    info_display->setAlignment(Qt::AlignTop);
     info_display_scroll.setWidget(info_display);
     info_display_scroll.setWidgetResizable(true);
 }
