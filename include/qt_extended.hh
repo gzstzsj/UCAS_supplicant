@@ -90,6 +90,8 @@ private:
     int isOffline;
     int retcode;
     int remuname;
+    int sent_login;
+    int sent_logoff;
     char message_server[100];
     QByteArray username;
     QByteArray password;
@@ -133,12 +135,16 @@ private:
     {
         del_off_layout();
         set_on_layout();
+        sent_login = 0;
+        sent_logoff = 0;
     }
         
     void redraw_offline()
     {
         del_on_layout();
         set_off_layout();
+        sent_login = 0;
+        sent_logoff = 0;
     }
 
     void set_usable_field()

@@ -147,6 +147,8 @@ void QMain::closeEvent(QCloseEvent *event)
 
 void QMain::login_thread()
 {
+    if (sent_login) return;
+    sent_login = 1;
     set_remu(storeUname.isChecked());
     userName.setReadOnly(true);
     passWord.setReadOnly(true);
@@ -157,6 +159,8 @@ void QMain::login_thread()
 
 void QMain::logout_thread()
 {
+    if (sent_logoff) return;
+    sent_logoff = 1;
     pthread_t tid;
     pthread_create(&tid, NULL, logout, (void*)this);
     pthread_detach(tid);
