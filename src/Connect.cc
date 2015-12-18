@@ -48,16 +48,10 @@ static const char* HTTP_HEADER_CONFIRM_1 = "GET /selfservice/module/userself/web
 static const char* HTTP_HEADER_CONFIRM_2 = " HTTP/1.1\r\nHost: 121.195.186.149\r\nUser-Agent: \
 Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.85 Safari/537.36\r\n\r\n";
 static const char* HTTP_HEADER_INFO_FIELD_1 = "GET /selfservice/module/userself/web/portal_packagemoney.jsf HTTP/1.1\r\nHost: 121.195.186.149\r\n\
-Upgrade-Insecure-Requests: 1\r\nUser-Agent: \
-Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.85 Safari/537.36\r\n\
 Cookie: JSESSIONID=";
 static const char* HTTP_HEADER_INFO_FIELD_2 = "GET /selfservice/module/userself/web/portal_lasttraffic.jsf HTTP/1.1\r\nHost: 121.195.186.149\r\n\
-Upgrade-Insecure-Requests: 1\r\nUser-Agent: \
-Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.85 Safari/537.36\r\n\
 Cookie: JSESSIONID=";
 static const char* HTTP_HEADER_INFO_FIELD_3 = "GET /selfservice/module/webcontent/web/portal_onlinedevice_list.jsf HTTP/1.1\r\nHost: 121.195.186.149\r\n\
-Upgrade-Insecure-Requests: 1\r\nUser-Agent: \
-Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.85 Safari/537.36\r\n\
 Cookie: JSESSIONID=";
 static const char* HTTP_HEADER_KEEPALIVE = "GET / HTTP/1.1\r\nHost: 184.87.132.234\r\n\r\n";
 static const size_t LENGTH_HEADER_LOGOUT = 254;
@@ -68,9 +62,9 @@ static const size_t LENGTH_HEADER_SUCCESS_1 = 50;
 static const size_t LENGTH_HEADER_SUCCESS_2 = 151;
 static const size_t LENGTH_HEADER_CONFIRM_1 = 66;
 static const size_t LENGTH_HEADER_CONFIRM_2 = 154;
-static const size_t LENGTH_HEADER_INFO_FIELD_1 = 261;
-static const size_t LENGTH_HEADER_INFO_FIELD_2 = 260;
-static const size_t LENGTH_HEADER_INFO_FIELD_3 = 268;
+static const size_t LENGTH_HEADER_INFO_FIELD_1 = 113;
+static const size_t LENGTH_HEADER_INFO_FIELD_2 = 112;
+static const size_t LENGTH_HEADER_INFO_FIELD_3 = 120;
 static const size_t LENGTH_HEADER_KEEPALIVE = 40;
 
 static const char* success = "success";
@@ -85,16 +79,16 @@ static char postfield[571];
 static pthread_mutex_t post_lock;
 
 static const char* AUTH_SERVER = "210.77.16.21";
-static const uint16_t AUTH_PORT = 80;
 static const char* INFO_SERVER = "121.195.186.149";
-static const uint16_t INFO_PORT = 80;
 static const char* BAIDU_SERVER = "184.87.132.234";
-static const uint16_t BAIDU_PORT = 80;
+static const uint16_t HTTP_PORT = 80;
 static char receiveline[MAXLINE+1];
 static pthread_mutex_t recv_lock;
 static char receiveline_keep[MAXLINE+1];
 static int active_keep;
 static pthread_mutex_t keep_lock;
+
+char error_message[LEN_ERROR];
 
 static char to_hex(char code) 
 {
@@ -130,16 +124,16 @@ static int connect_err(int sockfd, const struct sockaddr *servaddr, socklen_t ad
     else 
         switch (errno){
             case ETIMEDOUT:
-                printf("Connection timed out!\n");
+                snprintf(error_message, LEN_ERROR, "Connection timed out!\n");
                 return -1;
             case ECONNREFUSED:
-                printf("Connection refused!\n");
+                snprintf(error_message, LEN_ERROR, "Connection refused!\n");
                 return -1;
             case EHOSTUNREACH:
-                printf("Server unreachable!\n");
+                snprintf(error_message, LEN_ERROR, "Server unreachable!\n");
                 return -1;
             case ENETUNREACH:
-                printf("Server unreachable!\n");
+                snprintf(error_message, LEN_ERROR, "Server unreachable!\n");
                 return -1;
             default:
                 return -1;
@@ -152,13 +146,13 @@ static int addr_init(struct sockaddr_in *servaddr, const char *addr_host, const 
     servaddr->sin_family = AF_INET;
     servaddr->sin_port = htons(addr_port);
     if (inet_pton(AF_INET, addr_host, &(servaddr->sin_addr)) <= 0) {
-        printf("Failed to initialize server address!\n");
+        snprintf(error_message, LEN_ERROR, "Failed to initialize server address!\n");
         return -1;
     }
     return 0;
 }
 
-static int http_req(const char* http_header, size_t size_header, char* receiveline, size_t max_receive, int f_close)
+static int http_req(const char* server_addr, const uint16_t port, const char* http_header, size_t size_header, char* receiveline, size_t max_receive, int f_close)
 {
     struct sockaddr_in servaddr;
     int socketd;
@@ -166,11 +160,11 @@ static int http_req(const char* http_header, size_t size_header, char* receiveli
     size_t nleft = size_header;
     const char* wrptr = http_header;
     char* rdptr = receiveline;
-    if (addr_init(&servaddr, AUTH_SERVER, AUTH_PORT) < 0)
+    if (addr_init(&servaddr, server_addr, port) < 0)
         return -1;
     if ((socketd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
     {
-        printf("Failed to initialize socket descriptor!\n");
+        snprintf(error_message, LEN_ERROR, "Failed to initialize socket descriptor!\n");
         return -1;
     }
     if (connect_err(socketd, (struct sockaddr*)&servaddr, sizeof(struct sockaddr_in)) < 0)
@@ -182,99 +176,7 @@ static int http_req(const char* http_header, size_t size_header, char* receiveli
         {
             if (errno == EINTR) processed = 0;
             else {
-                printf("Write error!\n");
-                close(socketd);
-                return -2;
-            }
-        }
-        nleft -= processed;
-        wrptr += processed;
-    }
-    (void)shutdown(socketd, SHUT_WR);
-    nleft = max_receive;
-    /* Read from the Socket */
-    while ( nleft > 0 && (processed = read(socketd, rdptr, nleft)) > 0 )
-    {
-        rdptr += processed;
-        nleft -= processed;
-    }
-    *rdptr = '\0';
-    if (f_close)
-        (void)shutdown(socketd, SHUT_RD);
-    return 0;
-}
-
-static int conf_req(const char* http_header, size_t size_header, char* receiveline, size_t max_receive, int f_close)
-{
-    struct sockaddr_in servaddr;
-    int socketd;
-    ssize_t processed;
-    size_t nleft = size_header;
-    const char* wrptr = http_header;
-    char* rdptr = receiveline;
-    if (addr_init(&servaddr, INFO_SERVER, INFO_PORT) < 0)
-        return -1;
-    if ((socketd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-    {
-        printf("Failed to initialize socket descriptor!\n");
-        return -1;
-    }
-    if (connect_err(socketd, (struct sockaddr*)&servaddr, sizeof(struct sockaddr_in)) < 0)
-        return -1;
-    /* Write to the Socket */
-    while (nleft > 0) 
-    {
-        if ((processed = write(socketd, wrptr, nleft)) < 0)
-        {
-            if (errno == EINTR) processed = 0;
-            else {
-                printf("Write error!\n");
-                close(socketd);
-                return -2;
-            }
-        }
-        nleft -= processed;
-        wrptr += processed;
-    }
-    (void)shutdown(socketd, SHUT_WR);
-    nleft = max_receive;
-    /* Read from the Socket */
-    while ( nleft > 0 && (processed = read(socketd, rdptr, nleft)) > 0 )
-    {
-        rdptr += processed;
-        nleft -= processed;
-    }
-    *rdptr = '\0';
-    if (f_close)
-        (void)shutdown(socketd, SHUT_RD);
-    return 0;
-}
-
-static int baidu_req(const char* http_header, size_t size_header, char* receiveline, size_t max_receive, int f_close)
-{
-    struct sockaddr_in servaddr;
-    int socketd;
-    ssize_t processed;
-    size_t nleft = size_header;
-    const char* wrptr = http_header;
-    char* rdptr = receiveline;
-    if (addr_init(&servaddr, BAIDU_SERVER, BAIDU_PORT) < 0)
-        return -1;
-    if ((socketd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
-    {
-        printf("Failed to initialize socket descriptor!\n");
-        return -1;
-    }
-    if (connect_err(socketd, (struct sockaddr*)&servaddr, sizeof(struct sockaddr_in)) < 0)
-        return -1;
-    /* Write to the Socket */
-    while (nleft > 0) 
-    {
-        if ((processed = write(socketd, wrptr, nleft)) < 0)
-        {
-            if (errno == EINTR) processed = 0;
-            else {
-                printf("Write error!\n");
+                snprintf(error_message, LEN_ERROR, "Write error!\n");
                 close(socketd);
                 return -2;
             }
@@ -310,7 +212,7 @@ static int get_success()
     /* Send HTTP Request and Process the Response */
     nanosleep(&wait_time, NULL);
     pthread_mutex_lock(&recv_lock);
-    retcode = http_req(postfield, total_len, receiveline, 0, 1);
+    retcode = http_req(AUTH_SERVER,HTTP_PORT, postfield, total_len, receiveline, 0, 1);
     pthread_mutex_unlock(&recv_lock);
     pthread_mutex_unlock(&post_lock);
     return retcode;
@@ -327,7 +229,7 @@ void *QMain::keep_alive(void *arg)
     /* Prepare Post Field for Keepalive */
     while ( fake_this->isOffline == 0 )
     {
-        if (baidu_req(HTTP_HEADER_KEEPALIVE, LENGTH_HEADER_KEEPALIVE, receiveline_keep, MAXLINE, 0) != 0)
+        if (http_req(BAIDU_SERVER, HTTP_PORT, HTTP_HEADER_KEEPALIVE, LENGTH_HEADER_KEEPALIVE, receiveline_keep, MAXLINE, 0) != 0)
         {
             fake_this->isOffline = 2;
             continue;
@@ -373,7 +275,7 @@ static int get_confirm(void *arg)
 
     /* Send HTTP Request and Process the Response */
     pthread_mutex_lock(&recv_lock);
-    if (conf_req(postfield, total_len, receiveline, MAXLINE, 0) != 0)
+    if (http_req(INFO_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) != 0)
     {
         pthread_mutex_unlock(&recv_lock);
         pthread_mutex_unlock(&post_lock);
@@ -404,11 +306,12 @@ void *QMain::get_info_1(void *arg)
 
     /* Send HTTP Request and Process the Response */
     pthread_mutex_lock(&recv_lock);
-    if (conf_req(postfield, total_len, receiveline, MAXLINE, 0) == 0)
+    if (http_req(INFO_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         read_info_1(receiveline, info_text, MAXINFOLINE);
         fake_this->send_info();
     }
+    else fake_this->send_error();
     pthread_mutex_unlock(&recv_lock);
     pthread_mutex_unlock(&post_lock);
     return NULL;
@@ -429,11 +332,12 @@ void *QMain::get_info_2(void *arg)
 
     /* Send HTTP Request and Process the Response */
     pthread_mutex_lock(&recv_lock);
-    if (conf_req(postfield, total_len, receiveline, MAXLINE, 0) == 0)
+    if (http_req(INFO_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         read_info_2(receiveline, info_text, MAXINFOLINE);
         fake_this->send_info();
     }
+    else fake_this->send_error();
     pthread_mutex_unlock(&recv_lock);
     pthread_mutex_unlock(&post_lock);
     return NULL;
@@ -454,11 +358,12 @@ void *QMain::get_info_3(void *arg)
 
     /* Send HTTP Request and Process the Response */
     pthread_mutex_lock(&recv_lock);
-    if (conf_req(postfield, total_len, receiveline, MAXLINE, 0) == 0)
+    if (http_req(INFO_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         read_info_3(receiveline, info_text, MAXINFOLINE);
         fake_this->send_info();
     }
+    else fake_this->send_error();
     pthread_mutex_unlock(&recv_lock);
     pthread_mutex_unlock(&post_lock);
     return NULL;
@@ -477,8 +382,8 @@ void *QMain::login(void *arg)
         username_t = (char*)malloc(1);
         if (username_t == NULL)
         {
-            fake_this->retcode = -10;
-            printf("Failed to malloc memory!\n");
+            snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
+            fake_this->send_error();
             return NULL;
         }
         *username_t = '\0';
@@ -489,8 +394,8 @@ void *QMain::login(void *arg)
         username_t = (char*)malloc((strlen(username_raw)*5 + 1)*sizeof(char));
         if (username_t == NULL)
         {
-            fake_this->retcode = -10;
-            printf("Failed to malloc memory!\n");
+            snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
+            fake_this->send_error();
             return NULL;
         }
         urlencode(username_raw, username_t);
@@ -501,8 +406,8 @@ void *QMain::login(void *arg)
         password_t = (char*)malloc(1);
         if (password_t == NULL)
         {
-            fake_this->retcode = -10;
-            printf("Failed to malloc memory!\n");
+            snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
+            fake_this->send_error();
             free(username_t);
             return NULL;
         }
@@ -514,8 +419,8 @@ void *QMain::login(void *arg)
         password_t = (char*)malloc((strlen(password_raw)*5 + 1)*sizeof(char));
         if (password_t == NULL)
         {
-            fake_this->retcode = -10;
-            printf("Failed to malloc memory!\n");
+            snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
+            fake_this->send_error();
             free(username_t);
             return NULL;
         }
@@ -529,10 +434,10 @@ void *QMain::login(void *arg)
 
     /* Request queryString From Server */
     pthread_mutex_lock(&recv_lock);
-    if (http_req(HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 0) != 0) 
+    if (http_req(AUTH_SERVER, HTTP_PORT, HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 0) != 0) 
     {
         pthread_mutex_unlock(&recv_lock);
-        fake_this->retcode = -1;
+        fake_this->send_error();
         fake_this->send_fail();
         memset(password_t, 1, lenpword);
         free(username_t);
@@ -555,7 +460,8 @@ void *QMain::login(void *arg)
 	total_len += (LENGTH_HEADER_LOGIN+4+strlen(queryString));
 	loginpost = (char*)malloc(sizeof(char)*(total_len+1));
 	if (loginpost == NULL) {
-        fake_this->retcode = -1;
+        snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
+        fake_this->send_error();
         fake_this->send_fail();
         memset(password_t, 1, lenpword);
         free(username_t);
@@ -575,7 +481,7 @@ void *QMain::login(void *arg)
 	
 	/* Send HTTP Request and Process the Response */
     pthread_mutex_lock(&recv_lock);
-	if (http_req(loginpost, total_len, receiveline, MAXLINE, 0) == 0)
+	if (http_req(AUTH_SERVER, HTTP_PORT, loginpost, total_len, receiveline, MAXLINE, 0) == 0)
 	{
 	    if (readMessages((const char*)receiveline) == 0)
 	    {
@@ -597,18 +503,19 @@ void *QMain::login(void *arg)
         else 
         {
             fake_this->send_fail();
+            snprintf(error_message, LEN_ERROR, "Failed to get returned message!\n");
+            fake_this->send_error();
             pthread_mutex_unlock(&recv_lock);
         }
 	    memset(loginpost, 0, total_len);
 	    free(loginpost);
-        fake_this->retcode = 0;
         return NULL;
 	}
     fake_this->send_fail();
     pthread_mutex_unlock(&recv_lock);
 	memset(loginpost, 0, total_len);
 	free(loginpost);
-    fake_this->retcode = -2;
+    fake_this->send_error();
     return NULL;
 }
 
@@ -635,7 +542,7 @@ void *QMain::logout(void *arg)
 
     /* Send HTTP Request and Process the Response */
     pthread_mutex_lock(&recv_lock);
-    if (http_req(postfield, total_len, receiveline, MAXLINE, 0) == 0)
+    if (http_req(AUTH_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         fake_this->isOffline = 1;
         if ( readMessages((const char*)receiveline) == 0)
@@ -646,13 +553,13 @@ void *QMain::logout(void *arg)
         pthread_mutex_unlock(&recv_lock);
         pthread_mutex_unlock(&post_lock);
         fake_this->send_logoff_success();
-        fake_this->retcode = 0;
         fake_this->get_confirmed = 0;
         return NULL;
     }
     pthread_mutex_unlock(&recv_lock);
     pthread_mutex_unlock(&post_lock);
-    fake_this->retcode = -3;
+    fake_this->send_error();
+    fake_this->send_logoff_success();
     fake_this->get_confirmed = 0;
     return NULL;
 }
@@ -682,7 +589,7 @@ void *QMain::getflow(void *arg)
 
     /* Send HTTP Request and Process the Response */
     pthread_mutex_lock(&recv_lock);
-    if (http_req(postfield, total_len, receiveline, MAXLINE, 0) == 0)
+    if (http_req(AUTH_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         pthread_mutex_unlock(&post_lock);
         if ( (ret = readFlow((const char*)receiveline)) == 0)
@@ -717,10 +624,11 @@ int QMain::check_state()
     pthread_mutex_init(&post_lock, NULL);
     pthread_mutex_init(&recv_lock, NULL);
     pthread_mutex_lock(&recv_lock);
-    if (http_req(HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 0) != 0) 
+    if (http_req(AUTH_SERVER, HTTP_PORT, HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 0) != 0) 
     {
         pthread_mutex_unlock(&recv_lock);
         isOffline = 1;
+        send_error();
         return -2;
     }
 

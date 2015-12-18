@@ -2,6 +2,7 @@
 #include "../include/connect.h"
 
 char info_text[MAXLINE];
+extern char error_message[];
 
 void QMain::initialize()
 {
@@ -23,6 +24,8 @@ void QMain::initialize()
     info_display = NULL;
     get_confirmed = 0;
     remuname = 0;
+    sent_login = 0;
+    sent_logoff = 0;
 
     //Font
     font.setPointSize(9);
@@ -254,5 +257,41 @@ void QSuppWindow::initialize()
     setMinimumSize(100,100);
     exit_button.setText("Close");
     setLayout(&basic);
+    QObject::connect(&exit_button, &QPushButton::clicked, this, &QSuppWindow::close);
+}
+
+void QErrorWindow::showup()
+{
+    if (message != NULL) 
+    {
+        delete message;
+        message = NULL;
+    }
+    message = new QLabel(error_message, this);
+    basic.addWidget(message, 0, Qt::AlignCenter);
+    basic.addWidget(&exit_button, 0, Qt::AlignCenter);
+}
+
+void QErrorWindow::closeEvent(QCloseEvent *event)
+{
+    basic.removeWidget(&exit_button);
+    basic.removeWidget(message);
+    if (message != NULL) 
+    {
+        delete message;
+        message = NULL;
+    }
+}
+
+void QErrorWindow::initialize()
+{
+    message = NULL;
+    setWindowTitle("Error");
+    setMinimumSize(100,100);
+    exit_button.setText("Close");
+    setLayout(&basic);
+    setWindowFlags(Qt::WindowStaysOnTopHint);
+    setWindowModality(Qt::ApplicationModal);
+    message = new QLabel(error_message, this);
     QObject::connect(&exit_button, &QPushButton::clicked, this, &QSuppWindow::close);
 }

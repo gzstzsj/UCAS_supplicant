@@ -12,7 +12,6 @@
 #include <QLabel>
 #include <QString>
 #include <QScrollArea>
-#include <QDebug>
 #define len_username 20
 #define len_password 1024
 
@@ -75,6 +74,11 @@ public:
         emit login_fail();
     }
 
+    void send_error()
+    {
+        emit show_error();
+    }
+
 signals:
     void display_message(const QString & message);
     void display_success();
@@ -82,13 +86,13 @@ signals:
     void close_all_window();
     void info_success();
     void login_fail();
+    void show_error();
 
 protected:
     void closeEvent(QCloseEvent *event) Q_DECL_OVERRIDE;
 
 private:
     int isOffline;
-    int retcode;
     int remuname;
     int sent_login;
     int sent_logoff;
@@ -169,6 +173,20 @@ private:
     QVBoxLayout basic;
     QPushButton exit_button;
     int opened;
+};
+
+class QErrorWindow : public QWidget
+{
+    Q_OBJECT
+public:
+    void initialize();
+    void showup();
+protected:
+    void closeEvent(QCloseEvent *event) Q_DECL_OVERRIDE;
+private:
+    QLabel* message;
+    QVBoxLayout basic;
+    QPushButton exit_button;
 };
 
 #endif

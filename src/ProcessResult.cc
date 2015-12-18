@@ -12,6 +12,7 @@
 #define QUOTE '"'
 
 extern char info_text[];
+extern char error_message[];
 
 struct flow flow_current;
 int gfflag;
@@ -244,7 +245,7 @@ int readFlow(const char* input)
     ptr = strstr(ptr, "userName");
     if (ptr == NULL) 
     {
-        printf("Failed to get user information!\n");
+        snprintf(error_message, LEN_ERROR, "Failed to get user information!\n");
         return -1;
     }
     ptr += 11;
@@ -257,13 +258,13 @@ int readFlow(const char* input)
     ptr = strstr(ptr, "flow");
     if (ptr == NULL) 
     {
-        printf("Failed to get user information!\n");
+        snprintf(error_message, LEN_ERROR, "Failed to get user information!\n");
         return -1;
     }
     ptr = strstr(ptr, "value");
     if (ptr == NULL) 
     {
-        printf("Failed to get user information!\n");
+        snprintf(error_message, LEN_ERROR, "Failed to get user information!\n");
         return -2;
     }
     ptr += 10;
@@ -275,13 +276,13 @@ int readFlow(const char* input)
     ptr = strstr(ptr, "url");
     if (ptr == NULL) 
     {
-        printf("Failed to get user information!\n");
+        snprintf(error_message, LEN_ERROR, "Failed to get user information!\n");
         return -3;
     }
     ptr = strstr(ptr, "?");
     if (ptr == NULL) 
     {
-        printf("Failed to get user information!\n");
+        snprintf(error_message, LEN_ERROR, "Failed to get user information!\n");
         return -3;
     }
     ++ ptr;
@@ -447,7 +448,6 @@ int read_info_1(const char* input, char* output, int max_out)
             {
                 rdptr = tmprdptr;
                 info_ret_field[0] = '\0';
-                printf("\n");
                 continue;
             }
             spe_rdptr = strstr(spe_rdptr, "value");
@@ -470,7 +470,6 @@ int read_info_1(const char* input, char* output, int max_out)
 	        {
 	            rdptr = tmprdptr;
 	            info_ret_field[0] = '\0';
-	            printf("\n");
 	            continue;
 	        }
 	        tmprdptr = rdptr;
@@ -479,7 +478,6 @@ int read_info_1(const char* input, char* output, int max_out)
 	        {
 	            rdptr = tmprdptr;
 	            info_ret_field[0] = '\0';
-	            printf("\n");
 	            continue;
 	        }
 	        ++rdptr;
