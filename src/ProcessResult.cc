@@ -229,7 +229,7 @@ int readMessages(const char* input)
 int readResult(const char* input)
 {
     char suc[8];
-    const char* rdptr = strstr(input, "result");
+    const char* rdptr = strstr(input, "result\":\"");
     if (rdptr == NULL) return -1;
     rdptr += 9;
     snprintf(suc, 8, rdptr);
@@ -242,7 +242,7 @@ int readFlow(const char* input)
     char *wrptr = uname_ret;
     int tmpcnt = 0;
     double flowinbyte;
-    ptr = strstr(ptr, "userName");
+    ptr = strstr(ptr, "userName\":\"");
     if (ptr == NULL) 
     {
         snprintf(error_message, LEN_ERROR, "Failed to get user information!\n");
@@ -261,7 +261,7 @@ int readFlow(const char* input)
         snprintf(error_message, LEN_ERROR, "Failed to get user information!\n");
         return -1;
     }
-    ptr = strstr(ptr, "value");
+    ptr = strstr(ptr, "value\\\":\\\"");
     if (ptr == NULL) 
     {
         snprintf(error_message, LEN_ERROR, "Failed to get user information!\n");
@@ -387,7 +387,7 @@ int readJid(const char* input)
     const char *ptr;
     char *wrptr = jsessionid;
     int i;
-    ptr = strstr(input, "JSESSIONID");
+    ptr = strstr(input, "JSESSIONID=");
     if (ptr == NULL)
         return -1;
     ptr += 11;
@@ -450,7 +450,7 @@ int read_info_1(const char* input, char* output, int max_out)
                 info_ret_field[0] = '\0';
                 continue;
             }
-            spe_rdptr = strstr(spe_rdptr, "value");
+            spe_rdptr = strstr(spe_rdptr, "value=\"");
             spe_rdptr += 7;
             wrptr = info_ret_field;
             while (*spe_rdptr != '"' && *spe_rdptr != '\0' && tmpcnt < 299)
@@ -523,7 +523,7 @@ int read_info_2(const char* input, char* output, int max_out)
     rdptr = strstr(rdptr, "portal_freeFlowDesc");
     if (rdptr != NULL) 
     {
-        if ( (rdptr = strstr(rdptr, "value")) != NULL)
+        if ( (rdptr = strstr(rdptr, "value=\"")) != NULL)
         {
             rdptr += 7;
             wrptr = tot_flow;
@@ -536,7 +536,7 @@ int read_info_2(const char* input, char* output, int max_out)
             tmpcnt = 0;
             if ( (rdptr = strstr(rdptr, "portal_usedFreeDesc")) != NULL)
             {
-                if ( (rdptr = strstr(rdptr, "value")) != NULL)
+                if ( (rdptr = strstr(rdptr, "value=\"")) != NULL)
                 rdptr += 7;
                 wrptr = rem_flow;
                 while (*rdptr != '"' && *rdptr != '\0' && tmpcnt < 9)
@@ -629,7 +629,7 @@ int read_info_3(const char* input, char* output, int max_out)
         totcnt += snprintf(output+totcnt, max_out-totcnt, "IP: ");
         wrptr = output+totcnt;
         if (totcnt >= max_out-1) return totcnt;
-        if ( (rdptr = strstr(rdptr, "value")) == NULL)
+        if ( (rdptr = strstr(rdptr, "value=\"")) == NULL)
             return totcnt;
         rdptr += 7;
         while( *rdptr != '"' && *rdptr != '\0')
@@ -649,7 +649,7 @@ int read_info_3(const char* input, char* output, int max_out)
         totcnt += snprintf(output+totcnt, max_out-totcnt, "MAC: ");
         wrptr = output+totcnt;
         if (totcnt >= max_out-1) return totcnt;
-        if ( (rdptr = strstr(rdptr, "value")) == NULL)
+        if ( (rdptr = strstr(rdptr, "value=\"")) == NULL)
             return totcnt;
         rdptr += 7;
         while( *rdptr != '"' && *rdptr != '\0')
@@ -669,7 +669,7 @@ int read_info_3(const char* input, char* output, int max_out)
         totcnt += snprintf(output+totcnt, max_out-totcnt, "Logged in at: ");
         wrptr = output+totcnt;
         if (totcnt >= max_out-1) return totcnt;
-        if ( (rdptr = strstr(rdptr, "value")) == NULL)
+        if ( (rdptr = strstr(rdptr, "value=\"")) == NULL)
             return totcnt;
         rdptr += 7;
         while( *rdptr != '"' && *rdptr != '\0')

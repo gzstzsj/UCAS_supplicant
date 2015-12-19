@@ -76,16 +76,16 @@ static const unsigned int len2 = 10;
 static const unsigned int len3 = 22;
 static const struct timespec wait_time = { 0, 100000000 };
 static char postfield[571];
-static pthread_mutex_t post_lock;
 
 static const char* AUTH_SERVER = "210.77.16.21";
 static const char* INFO_SERVER = "121.195.186.149";
 static const char* BAIDU_SERVER = "184.87.132.234";
 static const uint16_t HTTP_PORT = 80;
 static char receiveline[MAXLINE+1];
-static pthread_mutex_t recv_lock;
 static char receiveline_keep[MAXLINE+1];
 static int active_keep;
+static pthread_mutex_t post_lock;
+static pthread_mutex_t recv_lock;
 static pthread_mutex_t keep_lock;
 
 char error_message[LEN_ERROR];
@@ -93,24 +93,40 @@ char error_message[LEN_ERROR];
 static char to_hex(char code) 
 {
     static char hex[] = "0123456789abcdef";
-    return hex[code & 15];
+    return hex[code & 0xf];
 }
 
-static void urlencode(const char* input, char* output)
+static void urlencode(const char* input, char* output, size_t max_len)
 {
+    if (max_len == 0) return;
     const char *rdptr = input;
     char* wrptr = output;
+    size_t tmpcnt = 0;
     while (*rdptr != '\0')
     {
         if (isalnum(*rdptr))
+        {
             *wrptr ++ = *rdptr ++;
+            ++ tmpcnt;
+            if (tmpcnt == max_len - 1) break;
+        }
         else
         {
             *wrptr ++ = '%';
+            ++ tmpcnt;
+            if (tmpcnt == max_len - 1) break;
             *wrptr ++ = '2';
+            ++ tmpcnt;
+            if (tmpcnt == max_len - 1) break;
             *wrptr ++ = '5';
+            ++ tmpcnt;
+            if (tmpcnt == max_len - 1) break;
             *wrptr ++ = to_hex((*rdptr) >> 4);
+            ++ tmpcnt;
+            if (tmpcnt == max_len - 1) break;
             *wrptr ++ = to_hex((*rdptr));
+            ++ tmpcnt;
+            if (tmpcnt == max_len - 1) break;
             ++ rdptr;
         }
     }
@@ -294,10 +310,17 @@ static int get_confirm(void *arg)
 void *QMain::get_info_1(void *arg)
 {
     unsigned int total_len;
+    int p;
     QMain *fake_this = (QMain*)arg;
 
-    while (fake_this->get_confirmed == 0)
-        get_confirm(arg);
+    if (fake_this->get_confirmed == 0)
+        if ( (p = get_confirm(arg)) != 0)
+        {
+            if  (p == -2)
+                snprintf(error_message, LEN_ERROR, "Invalid response, broken connection?");
+            fake_this->isOffline = 1;
+            fake_this->send_logoff_success();
+        }
 
     /* Prepare Post Field for Info Request */
     total_len = LENGTH_HEADER_INFO_FIELD_1 + strlen(jsessionid) + 4;
@@ -320,10 +343,17 @@ void *QMain::get_info_1(void *arg)
 void *QMain::get_info_2(void *arg)
 {
     unsigned int total_len;
+    int p;
     QMain *fake_this = (QMain*)arg;
 
-    while (fake_this->get_confirmed == 0)
-        get_confirm(arg);
+    if (fake_this->get_confirmed == 0)
+        if ( (p = get_confirm(arg)) != 0)
+        {
+            if  (p == -2)
+                snprintf(error_message, LEN_ERROR, "Invalid response, broken connection?");
+            fake_this->send_logoff_success();
+        }
+
 
     /* Prepare Post Field for Info Request */
     total_len = LENGTH_HEADER_INFO_FIELD_2 + strlen(jsessionid) + 4;
@@ -346,10 +376,17 @@ void *QMain::get_info_2(void *arg)
 void *QMain::get_info_3(void *arg)
 {
     unsigned int total_len;
+    int p;
     QMain *fake_this = (QMain*)arg;
 
-    while (fake_this->get_confirmed == 0)
-        get_confirm(arg);
+    if (fake_this->get_confirmed == 0)
+        if ( (p = get_confirm(arg)) != 0)
+        {
+            if  (p == -2)
+                snprintf(error_message, LEN_ERROR, "Invalid response, broken connection?");
+            fake_this->send_logoff_success();
+        }
+
 
     /* Prepare Post Field for Info Request */
     total_len = LENGTH_HEADER_INFO_FIELD_3 + strlen(jsessionid) + 4;
@@ -374,9 +411,12 @@ void *QMain::login(void *arg)
     QMain *fake_this = (QMain*) arg;
     unsigned int lenuname;
     unsigned int lenpword;
+    unsigned int total_len, total_len_temp, post_len;
+    int p;
     char *username_t, *password_t;
-
+    char *loginpost;
     char *username_raw, *password_raw; 
+
     if ( fake_this->userName.text().isEmpty() )
     {
         username_t = (char*)malloc(1);
@@ -391,14 +431,15 @@ void *QMain::login(void *arg)
     else 
     {
         username_raw = fake_this->username.data();
-        username_t = (char*)malloc((strlen(username_raw)*5 + 1)*sizeof(char));
+        p = strlen(username_raw)*5 + 1;
+        username_t = (char*)malloc(p*sizeof(char));
         if (username_t == NULL)
         {
             snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
             fake_this->send_error();
             return NULL;
         }
-        urlencode(username_raw, username_t);
+        urlencode(username_raw, username_t, p);
     }
 
     if ( fake_this->userName.text().isEmpty() )
@@ -416,6 +457,7 @@ void *QMain::login(void *arg)
     else 
     {
         password_raw = fake_this->password.data();
+        p = strlen(password_raw)*5 + 1;
         password_t = (char*)malloc((strlen(password_raw)*5 + 1)*sizeof(char));
         if (password_t == NULL)
         {
@@ -424,13 +466,11 @@ void *QMain::login(void *arg)
             free(username_t);
             return NULL;
         }
-        urlencode(password_raw, password_t);
+        urlencode(password_raw, password_t, p);
     }
 
-    char *loginpost;
     lenuname = strlen(username_t);
     lenpword = strlen(password_t);
-    unsigned int total_len, total_len_temp, post_len;
 
     /* Request queryString From Server */
     pthread_mutex_lock(&recv_lock);
@@ -502,10 +542,10 @@ void *QMain::login(void *arg)
 	    }
         else 
         {
+            pthread_mutex_unlock(&recv_lock);
             fake_this->send_fail();
             snprintf(error_message, LEN_ERROR, "Failed to get returned message!\n");
             fake_this->send_error();
-            pthread_mutex_unlock(&recv_lock);
         }
 	    memset(loginpost, 0, total_len);
 	    free(loginpost);
@@ -556,6 +596,7 @@ void *QMain::logout(void *arg)
         fake_this->get_confirmed = 0;
         return NULL;
     }
+    fake_this->isOffline = 1;
     pthread_mutex_unlock(&recv_lock);
     pthread_mutex_unlock(&post_lock);
     fake_this->send_error();

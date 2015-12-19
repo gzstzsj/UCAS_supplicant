@@ -178,6 +178,7 @@ void QMain::getflow_thread()
 
 void QMain::get_info_1_thread()
 {
+    if (sent_logoff) return;
     pthread_t tid;
     pthread_create(&tid, NULL, get_info_1, (void*)this);
     pthread_detach(tid);
@@ -185,6 +186,7 @@ void QMain::get_info_1_thread()
 
 void QMain::get_info_2_thread()
 {
+    if (sent_logoff) return;
     pthread_t tid;
     pthread_create(&tid, NULL, get_info_2, (void*)this);
     pthread_detach(tid);
@@ -192,6 +194,7 @@ void QMain::get_info_2_thread()
 
 void QMain::get_info_3_thread()
 {
+    if (sent_logoff) return;
     pthread_t tid;
     pthread_create(&tid, NULL, get_info_3, (void*)this);
     pthread_detach(tid);
