@@ -24,15 +24,39 @@ char messages[100];
 char userIndex[200];
 char infoString[280];
 char queryString[300];
-char info_ret_title[300];
-char info_ret_utf8_title[300];
-char info_ret_field[300];
-char info_ret_utf8_field[300];
+char info_ret_title[512];
+char info_ret_utf8_title[512];
+char info_ret_field[512];
+char info_ret_utf8_field[512];
 
 static const char* RES = "result\"";
 static const char* MES = "message\"";
 static const char* UID = "userIndex\"";
 static const char* XQINFO = "套餐详情";
+static const char* COMM = "<!--";
+
+static char seg_start[20];
+static char seg_end[20];
+static char seg_rate[20];
+static char seg_drate[20];
+
+static const double max = 999999999999;
+
+typedef struct seg
+{
+    double f_start;
+    double f_end;
+    double f_rate;
+    double f_drate;
+    struct seg* next;
+} 
+seg_info;
+
+typedef enum 
+{
+    charge,free1,free2,free3,other
+} 
+f_state;
 
 void trim(char* totrim)
 {
@@ -47,6 +71,35 @@ void trim(char* totrim)
             ++ rdptr;
         }
         if (*rdptr == '\t' || *rdptr == ' ' || *rdptr == '\n' || *rdptr == '\r')
+            ++ rdptr;
+        else 
+            *wrptr ++ = *rdptr ++;
+    }
+    *wrptr = '\0';
+}
+
+void trim_only_space_comm(char* totrim)
+{
+    const char* rdptr = totrim;
+    char* wrptr = totrim;
+    char comm_head[5];
+    int inDesc = 0;
+    while (*rdptr != '\0')
+    {
+        if (*rdptr == '<') 
+        {
+            inDesc = 1;
+            snprintf(comm_head, 5, rdptr);
+            if ( strcmp(COMM, comm_head) == 0 )
+            {
+                rdptr = strstr(rdptr, "-->");
+                if (rdptr == NULL) break;
+                rdptr += 3;
+                inDesc = 0;
+            }
+        }
+        if (*rdptr == '>') inDesc = 0;
+        if (inDesc == 0 && (*rdptr == '\t' || *rdptr == ' ' || *rdptr == '\n' || *rdptr == '\r'))
             ++ rdptr;
         else 
             *wrptr ++ = *rdptr ++;
@@ -422,7 +475,7 @@ int read_info_1(const char* input, char* output, int max_out)
         if (rdptr == NULL) break;
         ++rdptr;
         wrptr = info_ret_title;
-        while (*rdptr != '<' && *rdptr != '\0' && tmpcnt < 299)
+        while (*rdptr != '<' && *rdptr != '\0' && tmpcnt < 511)
         {
             *wrptr ++ = *rdptr ++;
             tmpcnt ++;
@@ -433,9 +486,9 @@ int read_info_1(const char* input, char* output, int max_out)
         // Change to UTF-8 Encoding
         tmp_conv1 = info_ret_title;
         tmp_conv2 = info_ret_utf8_title;
-        memset(tmp_conv2, 0, 300);
+        memset(tmp_conv2, 0, 512);
         tmp1 = strlen(info_ret_title);
-        tmp2 = 300;
+        tmp2 = 512;
         iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
         totcnt += snprintf(output+totcnt, max_out-totcnt, "<tr><td width=\"56\">%s</td>", info_ret_utf8_title);
         if (totcnt >= max_out-1) 
@@ -453,7 +506,7 @@ int read_info_1(const char* input, char* output, int max_out)
             spe_rdptr = strstr(spe_rdptr, "value=\"");
             spe_rdptr += 7;
             wrptr = info_ret_field;
-            while (*spe_rdptr != '"' && *spe_rdptr != '\0' && tmpcnt < 299)
+            while (*spe_rdptr != '"' && *spe_rdptr != '\0' && tmpcnt < 511)
             {
                 *wrptr ++ = *spe_rdptr ++;
                 tmpcnt ++;
@@ -482,7 +535,7 @@ int read_info_1(const char* input, char* output, int max_out)
 	        }
 	        ++rdptr;
 	        wrptr = info_ret_field;
-	        while (*rdptr != '<' && *rdptr != '\0' && tmpcnt < 299)
+	        while (*rdptr != '<' && *rdptr != '\0' && tmpcnt < 511)
 	        {
 	            *wrptr ++ = *rdptr ++;
 	            tmpcnt ++;
@@ -493,119 +546,9 @@ int read_info_1(const char* input, char* output, int max_out)
         }
         tmp_conv1 = info_ret_field;
         tmp_conv2 = info_ret_utf8_field;
-        memset(tmp_conv2, 0, 300);
+        memset(tmp_conv2, 0, 512);
         tmp1 = strlen(info_ret_field);
-        tmp2 = 300;
-        iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
-        totcnt += snprintf(output+totcnt, max_out-totcnt, "<td valign=\"middle\">%s\n</td></tr>", info_ret_utf8_field);
-        if (totcnt >= max_out-1) break;
-    }
-    if (totcnt < max_out - 8)
-        totcnt += snprintf(output+totcnt, max_out-totcnt, "</table>");
-    iconv_close(convertor);
-    return totcnt;
-}
-
-int read_info_2(const char* input, char* output, int max_out)
-{
-    const char* rdptr = input;
-    char* wrptr;
-    char rem_flow[10];
-    char tot_flow[10];
-    int tmpcnt = 0;
-    int totcnt = 0;
-    size_t tmp1, tmp2;
-    char *tmp_conv1, *tmp_conv2;
-    iconv_t convertor;
-    convertor = iconv_open("utf8", "gb18030");
-    totcnt += snprintf(output, max_out-totcnt, "<table border=\"0\" cellspacing=\"10\" frame=void>");
-    // Read flow
-    rdptr = strstr(rdptr, "portal_freeFlowDesc");
-    if (rdptr != NULL) 
-    {
-        if ( (rdptr = strstr(rdptr, "value=\"")) != NULL)
-        {
-            rdptr += 7;
-            wrptr = tot_flow;
-            while (*rdptr != '"' && *rdptr != '\0' && tmpcnt < 9)
-            {
-                *wrptr ++ = *rdptr ++;
-                ++ tmpcnt;
-            }
-            *wrptr = '\0';
-            tmpcnt = 0;
-            if ( (rdptr = strstr(rdptr, "portal_usedFreeDesc")) != NULL)
-            {
-                if ( (rdptr = strstr(rdptr, "value=\"")) != NULL)
-                rdptr += 7;
-                wrptr = rem_flow;
-                while (*rdptr != '"' && *rdptr != '\0' && tmpcnt < 9)
-                {
-                    *wrptr ++ = *rdptr ++;
-                    ++ tmpcnt;
-                }
-                *wrptr = '\0';
-                tmpcnt = 0;
-                totcnt += snprintf(output+totcnt, max_out-totcnt, "<tr><td width=\"56\">Data Usage:</td><td valign=\"middle\">%s/%s</td></tr>", rem_flow, tot_flow);
-            }
-        }
-    }
-    // Read other messages
-    if (rdptr == NULL) rdptr = input;
-    while ( (rdptr = strstr(rdptr, "<td class=\"leftitle alignbo")) != NULL)
-    {
-        if ( (rdptr = strstr(rdptr, ">")) == NULL) break;
-        ++ rdptr;
-        wrptr = info_ret_title;
-        while (*rdptr != '\0' && tmpcnt < 299)
-        {
-            if (*rdptr == '<')
-            {
-                snprintf(info_ret_field, 6, "%s", rdptr);
-                if (strcmp(info_ret_field, "</td>") == 0) break;
-            }
-            *wrptr ++ = *rdptr ++;
-            ++ tmpcnt;
-        }
-        *wrptr = '\0';
-        tmpcnt = 0;
-        trim(info_ret_title);
-        // Convert to utf8
-        tmp_conv1 = info_ret_title;
-        tmp_conv2 = info_ret_utf8_title;
-        memset(tmp_conv2, 0, 300);
-        tmp1 = strlen(info_ret_title);
-        tmp2 = 300;
-        iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
-        totcnt += snprintf(output+totcnt, max_out-totcnt, "<tr><td width=\"56\">%s</td>", info_ret_utf8_title);
-        if (totcnt >= max_out-1) break;
-        // Read field
-        if ( (rdptr = strstr(rdptr, "<td class=\"alignbo")) == NULL || (rdptr = strstr(rdptr, ">")) == NULL)
-        {
-            totcnt += snprintf(output+totcnt, max_out-totcnt, "</tr>");
-            if (totcnt >= max_out-1) break;
-            continue;
-        }
-        ++ rdptr;
-        wrptr = info_ret_field;
-        while (*rdptr != '\0' && tmpcnt < 299)
-        {
-            if (*rdptr == '<')
-            {
-                snprintf(info_ret_title, 6, "%s", rdptr);
-                if (strcmp(info_ret_title, "</td>") == 0) break;
-            }
-            *wrptr ++ = *rdptr ++;
-            ++ tmpcnt;
-        }
-        *wrptr = '\0';
-        tmpcnt = 0;
-        trim(info_ret_field);
-        tmp_conv1 = info_ret_field;
-        tmp_conv2 = info_ret_utf8_field;
-        memset(tmp_conv2, 0, 300);
-        tmp1 = strlen(info_ret_field);
-        tmp2 = 300;
+        tmp2 = 512;
         iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
         totcnt += snprintf(output+totcnt, max_out-totcnt, "<td valign=\"middle\">%s\n</td></tr>", info_ret_utf8_field);
         if (totcnt >= max_out-1) break;
@@ -698,4 +641,528 @@ int get_ret_code(const char* input)
     rdptr += 7;
     if (*rdptr == '\0') return -257;
     else return (*rdptr - 48);
+}
+
+static seg_info* insert(seg_info* at, float n_start, float n_end, float n_rate, float n_drate)
+{
+    seg_info* n_seg = (seg_info*)malloc(sizeof(seg_info));
+    if (n_seg == NULL) return NULL;
+    n_seg->f_start = n_start;
+    n_seg->f_end = n_end;
+    n_seg->f_rate = n_rate;
+    n_seg->f_drate = n_drate;
+    n_seg->next = NULL;
+    if (at != NULL)
+        at->next = n_seg;
+    return n_seg;
+}
+
+static void free_list(seg_info* head)
+{
+    seg_info* ptr = head;
+    seg_info* tmp = ptr;
+    while (ptr != NULL)
+    {
+        tmp = ptr->next;
+        free(ptr);
+        ptr = tmp;
+    }
+}
+
+int read_info_2(const char* input, char* output, int max_out)
+{
+    const char* rdptr;
+    char* wrptr;
+    double flowinMB;
+    double tmp_start, tmp_end, tmp_rate, tmp_drate;
+    seg_info* head = NULL;
+    seg_info* last = NULL;
+    seg_info *prev = NULL, *curr = NULL, *nxtt = NULL;
+    int i;
+    int totcnt = 0;
+    int tmpcnt = 0;
+    int measure;
+    double prevend;
+    size_t tmp1, tmp2;
+    char *tmp_conv1, *tmp_conv2;
+    int remday;
+    f_state curr_state;
+
+    iconv_t convertor;
+
+    if (max_out < 0) return -2;
+    *output = '\0';
+    rdptr = strstr(input, "typeForView");
+    if (rdptr == NULL) return -1;
+    rdptr = strstr(rdptr, "value=\"");
+    if (rdptr == NULL) return -1;
+    rdptr += 7;
+    convertor = iconv_open("utf8", "gb18030");
+    if (*rdptr == '5')
+    {
+        // Read used data flow
+        if ( (rdptr = strstr(input, "periodTrafficCumut")) == NULL)
+            if ( (rdptr = strstr(input, "culmulateFlow")) == NULL)
+            {
+                iconv_close(convertor);
+                return -1;
+            }
+        if ( (rdptr = strstr(rdptr, "value=\"")) == NULL)
+        {
+            iconv_close(convertor);
+            return -1;
+        }
+        rdptr += 7;
+        flowinMB = atof(rdptr);
+        if (flowinMB <= 0)
+        {   
+            if ( (rdptr = strstr(input, "culmulateFlow")) == NULL)
+            {
+                iconv_close(convertor);
+                return -1;
+            }
+            if ( (rdptr = strstr(rdptr, "value=\"")) == NULL)
+            {
+                iconv_close(convertor);
+                return -1;
+            }
+            rdptr += 7;
+            flowinMB = atof(rdptr);
+        }
+        if ( (rdptr = strstr(input, "measurement")) == NULL)
+        {
+            iconv_close(convertor);
+            return -1;
+        }
+        if ( (rdptr = strstr(rdptr, "value=\"")) == NULL)
+        {
+            iconv_close(convertor);
+            return -1;
+        }
+        rdptr += 7;
+        measure = (int)((*rdptr) - 48);
+        // Read flow table
+        snprintf(seg_start, 17, "startb startitem");
+        snprintf(seg_end, 8, "enditem");
+        snprintf(seg_rate, 9, "rateitem");
+        snprintf(seg_drate, 10, "drateitem");
+        for (i = 1;; ++i)
+        {
+            snprintf(seg_start+16, 2, "%d", i);
+            snprintf(seg_end+7, 2, "%d", i);
+            snprintf(seg_rate+8, 2, "%d", i);
+            snprintf(seg_drate+9, 2, "%d", i);
+            if ( (rdptr = strstr(input, seg_start)) == NULL) break;
+            if ( (rdptr = strstr(rdptr, "value=\"")) == NULL) 
+            {
+                free_list(head);
+                iconv_close(convertor);
+                return -1;
+            }
+            rdptr += 7;
+            tmp_start = atof(rdptr);
+            if ( (rdptr = strstr(rdptr, seg_end)) == NULL)
+            {
+                free_list(head);
+                iconv_close(convertor);
+                return -1;
+            }
+            if ( (rdptr = strstr(rdptr, "value=\"")) == NULL)
+            {
+                free_list(head);
+                iconv_close(convertor);
+                return -1;
+            }
+            rdptr += 7;
+            tmp_end = atof(rdptr);
+            if ( (rdptr = strstr(rdptr, seg_rate)) == NULL)
+            {
+                free_list(head);
+                iconv_close(convertor);
+                return -1;
+            }
+            if ( (rdptr = strstr(rdptr, "value=\"")) == NULL)
+            {
+                free_list(head);
+                iconv_close(convertor);
+                return -1;
+            }
+            rdptr += 7;
+            tmp_rate = atof(rdptr);
+            if ( (rdptr = strstr(rdptr, seg_drate)) == NULL)
+            {
+                free_list(head);
+                iconv_close(convertor);
+                return -1;
+            }
+            if ( (rdptr = strstr(rdptr, "value=\"")) == NULL)
+            {
+                free_list(head);
+                iconv_close(convertor);
+                return -1;
+            }
+            rdptr += 7;
+            tmp_drate = atof(rdptr);
+            if ( (last = insert(last, tmp_start, tmp_end, tmp_rate, tmp_drate)) == NULL)
+            {
+                free_list(head);
+                iconv_close(convertor);
+                return -1;
+            }
+            if (i == 1) head = last;
+        }
+        if (head == NULL) 
+        {
+            iconv_close(convertor);
+            return -1;
+        }
+        // Calculate current segment
+        curr = head;
+        while ( (flowinMB/1024) > curr->f_end)
+        {
+            prev = curr;
+            curr = curr->next;
+            if (curr == NULL)
+            {
+                free_list(head);
+                iconv_close(convertor);
+                return -1;
+            }
+        }
+        nxtt = curr->next;
+        // Write data usage
+        totcnt += snprintf(output, max_out-totcnt, "<table border=\"0\" cellspacing=\"10\" frame=void>");
+        if (measure == 3)
+            totcnt += snprintf(output+totcnt, max_out-totcnt, "<tr><td>Data Usage:</td><td valign=\"middle\">%.2lfG</td></tr>", flowinMB/1024);
+        else
+            totcnt += snprintf(output+totcnt, max_out-totcnt, "<tr><td>Data Usage:</td><td valign=\"middle\">%.2lfM</td></tr>", flowinMB);
+        if (nxtt != NULL)
+        {
+            if (nxtt->f_rate != 0 || nxtt->f_drate != 0)
+            {
+                if ( (rdptr = strstr(input, "<em class=\"nexttip\">")) != NULL)
+                {
+                    rdptr += 20;
+                    wrptr = info_ret_field;
+                    while (*rdptr != '\0' && tmpcnt < 511)
+                    {
+                        if (*rdptr == '<')
+                        {
+                            snprintf(info_ret_title, 6, "%s", rdptr);
+                            if (strcmp(info_ret_title, "</em>") == 0) break;
+                        }
+                        *wrptr ++ = *rdptr ++;
+                        ++ tmpcnt;
+                    }
+                    *wrptr = '\0';
+                    tmpcnt = 0;
+                    trim(info_ret_field);
+                    tmp1 = strlen(info_ret_field);
+                    tmp2 = 512;
+                    tmp_conv1 = info_ret_field;
+                    tmp_conv2 = info_ret_utf8_field;
+                    memset(tmp_conv2, 0, 512);
+                    iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+                    totcnt += snprintf(output+totcnt, max_out-totcnt, "<tr><td width = \"70\">%s</td><td>%.0lfG</td></tr>", info_ret_utf8_field, nxtt->f_start);
+                }
+            }
+            else
+            {
+                if ( (rdptr = strstr(input, "<em class=\"nexttip1\">")) != NULL)
+                {
+                    rdptr += 20;
+                    wrptr = info_ret_field;
+                    while (*rdptr != '\0' && tmpcnt < 511)
+                    {
+                        if (*rdptr == '<')
+                        {
+                            snprintf(info_ret_title, 6, "%s", rdptr);
+                            if (strcmp(info_ret_title, "</em>") == 0) break;
+                        }
+                        *wrptr ++ = *rdptr ++;
+                        ++ tmpcnt;
+                    }
+                    tmpcnt = 0;
+                    trim(info_ret_field);
+                    tmp1 = strlen(info_ret_field);
+                    tmp2 = 512;
+                    tmp_conv1 = info_ret_field;
+                    tmp_conv2 = info_ret_utf8_field;
+                    memset(tmp_conv2, 0, 512);
+                    iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+                    totcnt += snprintf(output+totcnt, max_out-totcnt, "<tr><td width = \"70\">%s</td><td>%.0lfG</td></tr>", info_ret_utf8_field, nxtt->f_start);
+                }
+            }
+        }
+        // Search for other package
+        if (curr->f_rate != 0 || curr->f_drate != 0) curr_state = charge;
+        else if (curr->f_end >= max) curr_state = free3;
+        else
+        {
+            if (prev == NULL) prevend = 0;
+            else prevend = prev->f_end;
+            if ((flowinMB/1024-prevend)/(curr->f_end-prevend) >= 0.8) curr_state = free2;
+            else curr_state = free1;
+        }
+        if ( (rdptr = strstr(input, "<tr id=\"packageOther\">")) != NULL)
+        { 
+            curr_state = other;
+            rdptr += 22;
+            wrptr = info_ret_field;
+            while (*rdptr != '\0' && tmpcnt < 511)
+            {
+                if (*rdptr == '<')
+                {
+                    snprintf(info_ret_title, 6, "%s", rdptr);
+                    if (strcmp(info_ret_title, "</tr>") == 0) break;
+                }
+                *wrptr ++ = *rdptr ++;
+                ++ tmpcnt;
+            }
+            tmpcnt = 0;
+            trim_only_space_comm(info_ret_field);
+            tmp1 = strlen(info_ret_field);
+            tmp2 = 512;
+            tmp_conv1 = info_ret_field;
+            tmp_conv2 = info_ret_utf8_field;
+            memset(tmp_conv2, 0, 512);
+            iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+            totcnt += snprintf(output+totcnt, max_out-totcnt, "<tr>%s</tr>", info_ret_utf8_field);
+        }
+        // Tip
+        if ( (rdptr = strstr(input, "<tr id=\"normalid_tip\">")) != NULL)
+        {
+            rdptr += 22;
+            if ( (rdptr = strstr(rdptr, "<td class=\"leftitle")) != NULL) 
+                if ( (rdptr = strstr(rdptr, ">")) != NULL)
+                {
+                    // tips
+                    ++ rdptr;
+                    wrptr = info_ret_title;
+                    tmpcnt = 0;
+                    while (*rdptr != '\0' && tmpcnt < 511)
+                    {
+                        if (*rdptr == '<')
+                        {
+                            snprintf(info_ret_field, 6, "%s", rdptr);
+                            if (strcmp(info_ret_field, "</td>") == 0) break;
+                        }
+                        *wrptr ++ = *rdptr ++;
+                        ++ tmpcnt;
+                    }
+                    *wrptr = '\0';
+                    tmpcnt = 0;
+                    trim(info_ret_title);
+                    tmp_conv1 = info_ret_title;
+                    tmp_conv2 = info_ret_utf8_title;
+                    memset(tmp_conv2, 0, 512);
+                    tmp1 = strlen(info_ret_title);
+                    tmp2 = 512;
+                    iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+                    totcnt += snprintf(output+totcnt, max_out-totcnt, "<tr><td>%s</td>", info_ret_utf8_title);
+                    // qin
+                    if ( (rdptr = strstr(rdptr, "<td class=\"alignbo\">")) != NULL)
+                    {
+                        rdptr += 20;
+                        wrptr = info_ret_title;
+                        tmpcnt = 0;
+                        while (*rdptr != '\0' && tmpcnt < 511)
+                        {
+                            if (*rdptr == '<')
+                            {
+                                snprintf(info_ret_field, 6, "%s", rdptr);
+                                if (strcmp(info_ret_field, "<span") == 0) break;
+                            }
+                            *wrptr ++ = *rdptr ++;
+                            ++ tmpcnt;
+                        }
+                        *wrptr = '\0';
+                        tmpcnt = 0;
+                        trim(info_ret_title);
+                        tmp_conv1 = info_ret_title;
+                        tmp_conv2 = info_ret_utf8_title;
+                        memset(tmp_conv2, 0, 512);
+                        tmp1 = strlen(info_ret_title);
+                        tmp2 = 512;
+                        iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+                        totcnt += snprintf(output+totcnt, max_out-totcnt, "<td>%s", info_ret_utf8_title);
+                        // span
+                        switch (curr_state)
+                        {
+                            case charge:
+                                if ( (rdptr = strstr(rdptr, "chargespan")) != NULL)
+                                    if ( (rdptr = strstr(rdptr, ">")) != NULL)
+                                    {
+                                        ++ rdptr;
+                                        wrptr = info_ret_title;
+                                        tmpcnt = 0;
+                                        while (*rdptr != '\0' && tmpcnt < 511)
+                                        {
+                                            if (*rdptr == '<')
+                                            {
+                                                snprintf(info_ret_field, 8, "%s", rdptr);
+                                                if (strcmp(info_ret_field, "</span>") == 0) break;
+                                            }
+                                            *wrptr ++ = *rdptr ++;
+                                            ++ tmpcnt;
+                                        }
+                                        *wrptr = '\0';
+                                        tmpcnt = 0;
+                                        trim(info_ret_title);
+                                        tmp_conv1 = info_ret_title;
+                                        tmp_conv2 = info_ret_utf8_title;
+                                        memset(tmp_conv2, 0, 512);
+                                        tmp1 = strlen(info_ret_title);
+                                        tmp2 = 512;
+                                        iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+                                        totcnt += snprintf(output+totcnt, max_out-totcnt, "%s</td>", info_ret_utf8_title);
+                                    }
+                                break;
+                            case free1:
+                                if ( (rdptr = strstr(rdptr, "freespan1")) != NULL)
+                                    if ( (rdptr = strstr(rdptr, ">")) != NULL)
+                                    {
+                                        ++ rdptr;
+                                        wrptr = info_ret_title;
+                                        tmpcnt = 0;
+                                        while (*rdptr != '\0' && tmpcnt < 511)
+                                        {
+                                            if (*rdptr == '<')
+                                            {
+                                                snprintf(info_ret_field, 8, "%s", rdptr);
+                                                if (strcmp(info_ret_field, "</span>") == 0) break;
+                                            }
+                                            *wrptr ++ = *rdptr ++;
+                                            ++ tmpcnt;
+                                        }
+                                        *wrptr = '\0';
+                                        tmpcnt = 0;
+                                        trim(info_ret_title);
+                                        tmp_conv1 = info_ret_title;
+                                        tmp_conv2 = info_ret_utf8_title;
+                                        memset(tmp_conv2, 0, 512);
+                                        tmp1 = strlen(info_ret_title);
+                                        tmp2 = 512;
+                                        iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+                                        totcnt += snprintf(output+totcnt, max_out-totcnt, "%s</td>", info_ret_utf8_title);
+                                    }
+                                break;
+                            case free2:
+                                if ( (rdptr = strstr(rdptr, "freespan2")) != NULL)
+                                    if ( (rdptr = strstr(rdptr, ">")) != NULL)
+                                    {
+                                        ++ rdptr;
+                                        wrptr = info_ret_title;
+                                        tmpcnt = 0;
+                                        while (*rdptr != '\0' && tmpcnt < 511)
+                                        {
+                                            if (*rdptr == '<')
+                                            {
+                                                snprintf(info_ret_field, 8, "%s", rdptr);
+                                                if (strcmp(info_ret_field, "</span>") == 0) break;
+                                            }
+                                            *wrptr ++ = *rdptr ++;
+                                            ++ tmpcnt;
+                                        }
+                                        *wrptr = '\0';
+                                        tmpcnt = 0;
+                                        trim(info_ret_title);
+                                        tmp_conv1 = info_ret_title;
+                                        tmp_conv2 = info_ret_utf8_title;
+                                        memset(tmp_conv2, 0, 512);
+                                        tmp1 = strlen(info_ret_title);
+                                        tmp2 = 512;
+                                        iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+                                        remday = 0;
+                                        if ( (rdptr = strstr(input, "leftPeriodRange")) != NULL && (rdptr = strstr(rdptr, "value=\"")) != NULL) 
+                                        {
+                                            rdptr += 7;
+                                            while (*rdptr < 58 && *rdptr > 47)
+                                            {
+                                                remday *= 10;
+                                                remday += (*(rdptr) - 48);
+                                                ++ rdptr; 
+                                            }
+                                        }
+                                        if (remday > 0 && measure == 3 && (curr->f_end*1024-flowinMB)/remday > 1024)
+                                            totcnt += snprintf(output+totcnt, max_out-totcnt, "%s%.2lfG</td>", info_ret_utf8_title,\
+                                                    (curr->f_end*1024-flowinMB)/(1024*remday));
+                                        else 
+                                            totcnt += snprintf(output+totcnt, max_out-totcnt, "%s%.2lfM</td>", info_ret_utf8_title,\
+                                                    (curr->f_end*1024-flowinMB)/remday);
+                                    }
+                                break;
+                            case free3:
+                                if ( (rdptr = strstr(rdptr, "freespan3")) != NULL)
+                                    if ( (rdptr = strstr(rdptr, ">")) != NULL)
+                                    {
+                                        ++ rdptr;
+                                        wrptr = info_ret_title;
+                                        tmpcnt = 0;
+                                        while (*rdptr != '\0' && tmpcnt < 511)
+                                        {
+                                            if (*rdptr == '<')
+                                            {
+                                                snprintf(info_ret_field, 8, "%s", rdptr);
+                                                if (strcmp(info_ret_field, "</span>") == 0) break;
+                                            }
+                                            *wrptr ++ = *rdptr ++;
+                                            ++ tmpcnt;
+                                        }
+                                        *wrptr = '\0';
+                                        tmpcnt = 0;
+                                        trim(info_ret_title);
+                                        tmp_conv1 = info_ret_title;
+                                        tmp_conv2 = info_ret_utf8_title;
+                                        memset(tmp_conv2, 0, 512);
+                                        tmp1 = strlen(info_ret_title);
+                                        tmp2 = 512;
+                                        iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+                                        totcnt += snprintf(output+totcnt, max_out-totcnt, "%s</td>", info_ret_utf8_title);
+                                    }
+                                break;
+                            case other:
+                                if ( (rdptr = strstr(rdptr, "otherpackagespan")) != NULL)
+                                    if ( (rdptr = strstr(rdptr, ">")) != NULL)
+                                    {
+                                        ++ rdptr;
+                                        wrptr = info_ret_title;
+                                        tmpcnt = 0;
+                                        while (*rdptr != '\0' && tmpcnt < 511)
+                                        {
+                                            if (*rdptr == '<')
+                                            {
+                                                snprintf(info_ret_field, 8, "%s", rdptr);
+                                                if (strcmp(info_ret_field, "</span>") == 0) break;
+                                            }
+                                            *wrptr ++ = *rdptr ++;
+                                            ++ tmpcnt;
+                                        }
+                                        *wrptr = '\0';
+                                        tmpcnt = 0;
+                                        trim(info_ret_title);
+                                        tmp_conv1 = info_ret_title;
+                                        tmp_conv2 = info_ret_utf8_title;
+                                        memset(tmp_conv2, 0, 512);
+                                        tmp1 = strlen(info_ret_title);
+                                        tmp2 = 512;
+                                        iconv(convertor, &tmp_conv1, &tmp1, &tmp_conv2, &tmp2);
+                                        totcnt += snprintf(output+totcnt, max_out-totcnt, "%s</td>", info_ret_utf8_title);
+                                    }
+                                break;
+                            default:
+                                ;
+                        }
+                    }
+                    totcnt += snprintf(output+totcnt, max_out-totcnt, "</tr>");
+                }
+        }
+    }
+    else 
+    {
+        // preserved 
+        ;
+    }
+    iconv_close(convertor);
+    return 0;
 }

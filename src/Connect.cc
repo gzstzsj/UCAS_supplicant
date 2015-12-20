@@ -8,14 +8,16 @@
 #include <errno.h>
 #include <stdint.h>
 #include <iconv.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "../include/connect.h"
 #include "../include/qt_extended.hh"
 
-#define INCRE 16
+#define INCRE 32
 #define POSTFIELDOFFSET 10
+#define LEN_PATH_POSTFIX 13
 
 extern struct flow flow_current;
 extern int gfflag;
@@ -49,7 +51,7 @@ static const char* HTTP_HEADER_CONFIRM_2 = " HTTP/1.1\r\nHost: 121.195.186.149\r
 Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.85 Safari/537.36\r\n\r\n";
 static const char* HTTP_HEADER_INFO_FIELD_1 = "GET /selfservice/module/userself/web/portal_packagemoney.jsf HTTP/1.1\r\nHost: 121.195.186.149\r\n\
 Cookie: JSESSIONID=";
-static const char* HTTP_HEADER_INFO_FIELD_2 = "GET /selfservice/module/userself/web/portal_lasttraffic.jsf HTTP/1.1\r\nHost: 121.195.186.149\r\n\
+static const char* HTTP_HEADER_INFO_FIELD_2 = "GET /selfservice/module/userself/web/portal_chargetraffic.jsf HTTP/1.1\r\nHost: 121.195.186.149\r\n\
 Cookie: JSESSIONID=";
 static const char* HTTP_HEADER_INFO_FIELD_3 = "GET /selfservice/module/webcontent/web/portal_onlinedevice_list.jsf HTTP/1.1\r\nHost: 121.195.186.149\r\n\
 Cookie: JSESSIONID=";
@@ -63,7 +65,7 @@ static const size_t LENGTH_HEADER_SUCCESS_2 = 151;
 static const size_t LENGTH_HEADER_CONFIRM_1 = 66;
 static const size_t LENGTH_HEADER_CONFIRM_2 = 154;
 static const size_t LENGTH_HEADER_INFO_FIELD_1 = 113;
-static const size_t LENGTH_HEADER_INFO_FIELD_2 = 112;
+static const size_t LENGTH_HEADER_INFO_FIELD_2 = 114;
 static const size_t LENGTH_HEADER_INFO_FIELD_3 = 120;
 static const size_t LENGTH_HEADER_KEEPALIVE = 40;
 
@@ -76,6 +78,11 @@ static const unsigned int len2 = 10;
 static const unsigned int len3 = 22;
 static const struct timespec wait_time = { 0, 100000000 };
 static char postfield[571];
+
+static const char* PATH_POSTFIX = "/.ucas_uname";
+static char* env_home;
+static char* read_uname;
+static char* rec_path;
 
 static const char* AUTH_SERVER = "210.77.16.21";
 static const char* INFO_SERVER = "121.195.186.149";
@@ -234,6 +241,153 @@ static int get_success()
     return retcode;
 }
 
+static int write_uname(QMain* m_pro, const char* uname)
+{
+    FILE* fp;
+    int p;
+    env_home = getenv("HOME");
+    p = strlen(env_home) + LEN_PATH_POSTFIX;
+    rec_path = new char[p];
+    snprintf(rec_path, p, "%s%s", env_home, PATH_POSTFIX);
+    fp = fopen(rec_path, "w");
+    if (fp != NULL)
+    {
+        if (m_pro->get_remu())
+            fprintf(fp, "1\n%s", uname);
+        else 
+            fprintf(fp, "0\n");
+        fclose(fp);
+        delete rec_path;
+        return 0;
+    }
+    delete rec_path;
+    p = 1 + LEN_PATH_POSTFIX;
+    rec_path = new char[p];
+    snprintf(rec_path, p, ".%s", PATH_POSTFIX);
+    fp = fopen(rec_path, "w");
+    if (fp != NULL)
+    {
+        if (m_pro->get_remu())
+            fprintf(fp, "1\n%s", uname);
+        else 
+            fprintf(fp, "0\n");
+        fclose(fp);
+        delete rec_path;
+        return 0;
+    }
+    delete rec_path;
+    return -1;
+}
+
+int read_username()
+{
+    int fd;
+    int p;
+    int locsize;
+    int unsize = INCRE;
+    char bo;
+    char* rdptr;
+    env_home = getenv("HOME");
+    p = strlen(env_home) + LEN_PATH_POSTFIX;
+    rec_path = new char[p];
+    snprintf(rec_path, p, "%s%s", env_home, PATH_POSTFIX);
+    fd = open(rec_path, O_RDONLY);
+    if (fd >= 0)
+    {
+        if (read(fd, &bo, 1) > 0 && bo == '1')
+        {
+            while (read(fd, &bo, 1) && bo != '\n');
+            if (bo == '\n')
+            {
+                read_uname = (char*)malloc(unsize*sizeof(char));
+                if (read_uname == NULL)
+                {
+                    snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
+                    delete rec_path;
+                    close(fd);
+                    return -1;
+                }
+                rdptr = read_uname;
+                while ( (locsize = read(fd, rdptr, INCRE)) == INCRE)
+                {   
+                    unsize += INCRE;
+                    rdptr = (char*)realloc(read_uname, unsize*sizeof(char));
+                    if (rdptr == NULL)
+                    {
+                        if (read_uname != NULL) free(read_uname);
+                        snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
+                        delete rec_path;
+                        close(fd);
+                        return -1;
+                    }
+                    read_uname = rdptr;
+                    rdptr = read_uname + unsize - INCRE;
+                }
+                *(rdptr + locsize) = '\0';
+                delete rec_path;
+                close(fd);
+                return 0;
+            }
+        }
+        else 
+        {
+            delete rec_path;
+            close(fd);
+            return -2;
+        }
+    }
+    p = 1 + LEN_PATH_POSTFIX;
+    rec_path = new char[p];
+    snprintf(rec_path, p, ".%s", PATH_POSTFIX);
+    fd = open(rec_path, O_RDONLY);
+    if (fd >= 0)
+    {
+        if (read(fd, &bo, 1) > 0 && bo == '1')
+        {
+            while (read(fd, &bo, 1) && bo != '\n');
+            if (bo == '\n')
+            {
+                read_uname = (char*)malloc(unsize*sizeof(char));
+                if (read_uname == NULL)
+                {
+                    snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
+                    delete rec_path;
+                    close(fd);
+                    return -1;
+                }
+                rdptr = read_uname;
+                while ( (locsize = read(fd, rdptr, INCRE)) == INCRE)
+                {   
+                    unsize += INCRE;
+                    rdptr = (char*)realloc(read_uname, unsize*sizeof(char));
+                    if (rdptr == NULL)
+                    {
+                        if (read_uname != NULL) free(read_uname);
+                        snprintf(error_message, LEN_ERROR, "Failed to malloc memory!\n");
+                        delete rec_path;
+                        close(fd);
+                        return -1;
+                    }
+                    read_uname = rdptr;
+                    rdptr = read_uname + unsize - INCRE;
+                }
+                *(rdptr + locsize) = '\0';
+                delete rec_path;
+                close(fd);
+                return 0;
+            }
+        }
+        else 
+        {
+            delete rec_path;
+            close(fd);
+            return -2;
+        }
+    }
+    delete rec_path;
+    return -1;
+}
+
 void *QMain::keep_alive(void *arg)
 {
     QMain *fake_this = (QMain*)arg;
@@ -310,17 +464,11 @@ static int get_confirm(void *arg)
 void *QMain::get_info_1(void *arg)
 {
     unsigned int total_len;
-    int p;
     QMain *fake_this = (QMain*)arg;
 
-    if (fake_this->get_confirmed == 0)
-        if ( (p = get_confirm(arg)) != 0)
-        {
-            if  (p == -2)
-                snprintf(error_message, LEN_ERROR, "Invalid response, broken connection?");
-            fake_this->isOffline = 1;
-            fake_this->send_logoff_success();
-        }
+    while (fake_this->get_confirmed == 0 && fake_this->isOffline)
+        sleep(1);
+    if (fake_this->isOffline) return NULL;
 
     /* Prepare Post Field for Info Request */
     total_len = LENGTH_HEADER_INFO_FIELD_1 + strlen(jsessionid) + 4;
@@ -343,17 +491,11 @@ void *QMain::get_info_1(void *arg)
 void *QMain::get_info_2(void *arg)
 {
     unsigned int total_len;
-    int p;
     QMain *fake_this = (QMain*)arg;
 
-    if (fake_this->get_confirmed == 0)
-        if ( (p = get_confirm(arg)) != 0)
-        {
-            if  (p == -2)
-                snprintf(error_message, LEN_ERROR, "Invalid response, broken connection?");
-            fake_this->send_logoff_success();
-        }
-
+    while (fake_this->get_confirmed == 0 && fake_this->isOffline)
+        sleep(1);
+    if (fake_this->isOffline) return NULL;
 
     /* Prepare Post Field for Info Request */
     total_len = LENGTH_HEADER_INFO_FIELD_2 + strlen(jsessionid) + 4;
@@ -376,17 +518,11 @@ void *QMain::get_info_2(void *arg)
 void *QMain::get_info_3(void *arg)
 {
     unsigned int total_len;
-    int p;
     QMain *fake_this = (QMain*)arg;
 
-    if (fake_this->get_confirmed == 0)
-        if ( (p = get_confirm(arg)) != 0)
-        {
-            if  (p == -2)
-                snprintf(error_message, LEN_ERROR, "Invalid response, broken connection?");
-            fake_this->send_logoff_success();
-        }
-
+    while (fake_this->get_confirmed == 0 && fake_this->isOffline)
+        sleep(1);
+    if (fake_this->isOffline) return NULL;
 
     /* Prepare Post Field for Info Request */
     total_len = LENGTH_HEADER_INFO_FIELD_3 + strlen(jsessionid) + 4;
@@ -427,6 +563,7 @@ void *QMain::login(void *arg)
             return NULL;
         }
         *username_t = '\0';
+        username_raw = username_t;
     }
     else 
     {
@@ -471,6 +608,9 @@ void *QMain::login(void *arg)
 
     lenuname = strlen(username_t);
     lenpword = strlen(password_t);
+
+    /* Record Username */
+    write_uname(fake_this, username_raw);
 
     /* Request queryString From Server */
     pthread_mutex_lock(&recv_lock);
@@ -665,6 +805,12 @@ int QMain::check_state()
     pthread_mutex_init(&post_lock, NULL);
     pthread_mutex_init(&recv_lock, NULL);
     pthread_mutex_lock(&recv_lock);
+    if (read_username() == 0)
+    {
+        restore_uname(read_uname);
+        get_username(userName.text());
+        storeUname.setCheckState(Qt::Checked);
+    }
     if (http_req(AUTH_SERVER, HTTP_PORT, HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 0) != 0) 
     {
         pthread_mutex_unlock(&recv_lock);

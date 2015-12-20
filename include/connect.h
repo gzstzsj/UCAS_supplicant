@@ -1,7 +1,7 @@
 #ifndef __UCAS_CONNECT_H__
 #define __UCAS_CONNECT_H__
 #define MAXLINE 1048576
-#define MAXINFOLINE 1024
+#define MAXINFOLINE 2048
 #define LEN_ERROR 50
 #include <QString>
 

@@ -3,6 +3,7 @@
 
 char info_text[MAXLINE];
 extern char error_message[];
+extern int read_username();
 
 void QMain::initialize()
 {
@@ -107,11 +108,10 @@ void QMain::del_off_layout()
         main_layout->removeWidget(&passWordPrompt);
         main_layout->removeWidget(&passWord);
         main_layout->removeWidget(&submit);
-        if (!remuname)
-        {
-            userName.setText("");
-            get_username(userName.text());
-        }
+        if (read_username() != 0) 
+            if (!remuname)
+                userName.setText("");
+        get_username(userName.text());
         passWord.setText("");
         get_password(passWord.text());
         userNamePrompt.setVisible(0);

@@ -42,9 +42,18 @@ public:
     void set_on_layout();
     void del_off_layout();
     void del_on_layout();
+    void restore_uname(const QString & uname)
+    {
+        userName.setText(uname);
+    }
     void set_remu(int remu)
     {
         remuname = remu;
+    }
+
+    int get_remu()
+    {
+        return remuname;
     }
 
     int get_confirmed;
