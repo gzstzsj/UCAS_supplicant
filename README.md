@@ -1,6 +1,6 @@
 # Basic GUI for UCAS ePortal
 
-**UCAS_supplicnat**是为Unix和类Unix系统写的客户端程序。
+**UCAS_supplicant**是为Unix和类Unix系统写的客户端程序。
 
 现在许多*C++*和*Qt*方法的错误处理还没有做完，慢速网络连接下的测试也不完整，特别是发生超时时的清理。导致程序不稳定的部分因素还没有全改好，尽管大部分情况下已经比较稳定。
 
