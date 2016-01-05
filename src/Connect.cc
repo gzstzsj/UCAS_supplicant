@@ -18,6 +18,9 @@
 #define INCRE 32
 #define POSTFIELDOFFSET 10
 #define LEN_PATH_POSTFIX 13
+#define TRYLOCK_INTERVAL_SECOND 5
+#define TRYLOCK_TOTAL_ATTEMPS 6
+#define CONNECT_TIMEOUT_SECOND 60
 
 extern struct flow flow_current;
 extern int gfflag;
@@ -141,9 +144,62 @@ static void urlencode(const char* input, char* output, size_t max_len)
 }
 
 /* Connect to the Auth Server */
+int connect_nonb(int sockfd, const struct sockaddr *saptr, socklen_t salen, int nsec)
+{
+	int				flags, n, error;
+	socklen_t		len;
+	fd_set			rset, wset;
+	struct timeval	tval;
+
+	flags = fcntl(sockfd, F_GETFL, 0);
+    if (flags == -1) return -1;
+	if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) == -1) return -1;
+
+	error = 0;
+	if ( (n = connect(sockfd, saptr, salen)) < 0)
+		if (errno != EINPROGRESS)
+			return -1;
+
+	if (n == 0)
+    {
+        fcntl(sockfd, F_SETFL, flags);  /* restore file status flags */
+        return 0;
+    }
+		//goto done;	/* connect completed immediately */
+
+	FD_ZERO(&rset);
+	FD_SET(sockfd, &rset);
+	wset = rset;
+	tval.tv_sec = nsec;
+	tval.tv_usec = 0;
+
+	if ( (n = select(sockfd+1, &rset, &wset, NULL, nsec ? &tval : NULL)) == 0) 
+    {
+		close(sockfd);		/* timeout */
+		errno = ETIMEDOUT;
+		return -1;
+	}
+
+	if (FD_ISSET(sockfd, &rset) || FD_ISSET(sockfd, &wset)) {
+		len = sizeof(error);
+		if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len) < 0)
+			return -1;			/* Solaris pending error */
+	} else
+        return -2;
+
+    fcntl(sockfd, F_SETFL, flags);  /* restore file status flags */
+
+	if (error) {
+		close(sockfd);		/* just in case */
+		errno = error;
+		return -1;
+	}
+	return 0;
+}
+
 static int connect_err(int sockfd, const struct sockaddr *servaddr, socklen_t addrlen)
 {
-    if (connect(sockfd, servaddr, addrlen) == 0) return 0;
+    if (connect_nonb(sockfd, servaddr, addrlen, CONNECT_TIMEOUT_SECOND) == 0) return 0;
     else 
         switch (errno){
             case ETIMEDOUT:
@@ -159,6 +215,7 @@ static int connect_err(int sockfd, const struct sockaddr *servaddr, socklen_t ad
                 snprintf(error_message, LEN_ERROR, "Server unreachable!\n");
                 return -1;
             default:
+                snprintf(error_message, LEN_ERROR, "Socket error!\n");
                 return -1;
         }
 }
@@ -193,6 +250,7 @@ static int http_req(const char* server_addr, const uint16_t port, const char* ht
     if (connect_err(socketd, (struct sockaddr*)&servaddr, sizeof(struct sockaddr_in)) < 0)
         return -1;
     /* Write to the Socket */
+    printf("here %x\n", pthread_self());
     while (nleft > 0) 
     {
         if ((processed = write(socketd, wrptr, nleft)) < 0)
@@ -207,6 +265,7 @@ static int http_req(const char* server_addr, const uint16_t port, const char* ht
         nleft -= processed;
         wrptr += processed;
     }
+    printf("here %x\n", pthread_self());
     (void)shutdown(socketd, SHUT_WR);
     nleft = max_receive;
     /* Read from the Socket */
@@ -216,6 +275,7 @@ static int http_req(const char* server_addr, const uint16_t port, const char* ht
         nleft -= processed;
     }
     *rdptr = '\0';
+    printf("here %x\n", pthread_self());
     if (f_close)
         (void)shutdown(socketd, SHUT_RD);
     return 0;
@@ -436,15 +496,22 @@ void *QMain::keep_alive(void *arg)
 static int get_confirm(void *arg)
 {
     unsigned int total_len;
+    int att, ret;
 
     /* Prepare Post Field for Confirm */
     total_len = LENGTH_HEADER_CONFIRM_1 + LENGTH_HEADER_CONFIRM_2 + strlen(infoString);
-    pthread_mutex_lock(&post_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&post_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) return -3;
     (void)snprintf(postfield, total_len+1, "%s%s%s%s", HTTP_HEADER_CONFIRM_1,\
             infoString, HTTP_HEADER_CONFIRM_2, userIndex);
 
     /* Send HTTP Request and Process the Response */
-    pthread_mutex_lock(&recv_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&recv_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) 
+    {
+        pthread_mutex_unlock(&post_lock);
+        return -3;
+    }
     if (http_req(INFO_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) != 0)
     {
         pthread_mutex_unlock(&recv_lock);
@@ -464,19 +531,26 @@ static int get_confirm(void *arg)
 void *QMain::get_info_1(void *arg)
 {
     unsigned int total_len;
+    int att, ret;
     QMain *fake_this = (QMain*)arg;
 
-    while (fake_this->get_confirmed == 0 && fake_this->isOffline)
+    while (fake_this->get_confirmed == 0 && !fake_this->isOffline)
         sleep(1);
     if (fake_this->isOffline) return NULL;
 
     /* Prepare Post Field for Info Request */
     total_len = LENGTH_HEADER_INFO_FIELD_1 + strlen(jsessionid) + 4;
-    pthread_mutex_lock(&post_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&post_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) return NULL;
     (void)snprintf(postfield, total_len+1, "%s%s\r\n\r\n", HTTP_HEADER_INFO_FIELD_1, jsessionid);
 
     /* Send HTTP Request and Process the Response */
-    pthread_mutex_lock(&recv_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&recv_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) 
+    {
+        pthread_mutex_unlock(&post_lock);
+        return NULL;
+    }
     if (http_req(INFO_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         read_info_1(receiveline, info_text, MAXINFOLINE);
@@ -491,19 +565,26 @@ void *QMain::get_info_1(void *arg)
 void *QMain::get_info_2(void *arg)
 {
     unsigned int total_len;
+    int att, ret;
     QMain *fake_this = (QMain*)arg;
 
-    while (fake_this->get_confirmed == 0 && fake_this->isOffline)
+    while (fake_this->get_confirmed == 0 && !fake_this->isOffline)
         sleep(1);
     if (fake_this->isOffline) return NULL;
 
     /* Prepare Post Field for Info Request */
     total_len = LENGTH_HEADER_INFO_FIELD_2 + strlen(jsessionid) + 4;
-    pthread_mutex_lock(&post_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&post_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) return NULL;
     (void)snprintf(postfield, total_len+1, "%s%s\r\n\r\n", HTTP_HEADER_INFO_FIELD_2, jsessionid);
 
     /* Send HTTP Request and Process the Response */
-    pthread_mutex_lock(&recv_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&recv_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) 
+    {
+        pthread_mutex_unlock(&post_lock);
+        return NULL;
+    }
     if (http_req(INFO_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         read_info_2(receiveline, info_text, MAXINFOLINE);
@@ -518,19 +599,26 @@ void *QMain::get_info_2(void *arg)
 void *QMain::get_info_3(void *arg)
 {
     unsigned int total_len;
+    int att, ret;
     QMain *fake_this = (QMain*)arg;
 
-    while (fake_this->get_confirmed == 0 && fake_this->isOffline)
+    while (fake_this->get_confirmed == 0 && !fake_this->isOffline)
         sleep(1);
     if (fake_this->isOffline) return NULL;
 
     /* Prepare Post Field for Info Request */
     total_len = LENGTH_HEADER_INFO_FIELD_3 + strlen(jsessionid) + 4;
-    pthread_mutex_lock(&post_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&post_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) return NULL;
     (void)snprintf(postfield, total_len+1, "%s%s\r\n\r\n", HTTP_HEADER_INFO_FIELD_3, jsessionid);
 
     /* Send HTTP Request and Process the Response */
-    pthread_mutex_lock(&recv_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&recv_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) 
+    {
+        pthread_mutex_unlock(&post_lock);
+        return NULL;
+    }
     if (http_req(INFO_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         read_info_3(receiveline, info_text, MAXINFOLINE);
@@ -549,6 +637,7 @@ void *QMain::login(void *arg)
     unsigned int lenpword;
     unsigned int total_len, total_len_temp, post_len;
     int p;
+    int att, ret;
     char *username_t, *password_t;
     char *loginpost;
     char *username_raw, *password_raw; 
@@ -613,7 +702,16 @@ void *QMain::login(void *arg)
     write_uname(fake_this, username_raw);
 
     /* Request queryString From Server */
-    pthread_mutex_lock(&recv_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&recv_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) 
+    {
+        fake_this->send_error();
+        fake_this->send_fail();
+        memset(password_t, 1, lenpword);
+        free(username_t);
+        free(password_t);
+        return NULL;
+    }
     if (http_req(AUTH_SERVER, HTTP_PORT, HTTP_HEADER_REQID, LENGTH_HEADER_REQID, receiveline, MAXLINE, 0) != 0) 
     {
         pthread_mutex_unlock(&recv_lock);
@@ -660,7 +758,13 @@ void *QMain::login(void *arg)
 	userIndex[0] = '\0';
 	
 	/* Send HTTP Request and Process the Response */
-    pthread_mutex_lock(&recv_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&recv_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) 
+    {
+	    memset(loginpost, 0, total_len);
+	    free(loginpost);
+        return NULL;
+    }
 	if (http_req(AUTH_SERVER, HTTP_PORT, loginpost, total_len, receiveline, MAXLINE, 0) == 0)
 	{
 	    if (readMessages((const char*)receiveline) == 0)
@@ -704,6 +808,7 @@ void *QMain::logout(void *arg)
     QMain *fake_this = (QMain*) arg;
     unsigned int total_len, post_len;
     unsigned int post_len_temp;
+    int att, ret;
     messages[0] = '\0';
 
     fake_this->rem_flow.setText("");
@@ -716,12 +821,18 @@ void *QMain::logout(void *arg)
         post_len_temp /= 10;
         ++total_len;
     }
-    pthread_mutex_lock(&post_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&post_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) return NULL;
     (void)snprintf(postfield, total_len+1, "%s%d\r\n\r\nuserIndex=%s", HTTP_HEADER_LOGOUT,\
             post_len, userIndex);
 
     /* Send HTTP Request and Process the Response */
-    pthread_mutex_lock(&recv_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&recv_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) 
+    {
+        pthread_mutex_unlock(&post_lock);
+        return NULL;
+    }
     if (http_req(AUTH_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         fake_this->isOffline = 1;
@@ -751,8 +862,8 @@ void *QMain::getflow(void *arg)
     if (gfflag == 0) return NULL;
     unsigned int total_len, post_len;
     unsigned int post_len_temp;
+    int att, ret;
     int tmp;
-    int ret;
     flow_text[0] = '\0';
 
     /* Prepare Post Field for GetOnlineUserInfo */
@@ -764,12 +875,18 @@ void *QMain::getflow(void *arg)
         post_len_temp /= 10;
         ++total_len;
     }
-    pthread_mutex_lock(&post_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&post_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) return NULL;
     (void)snprintf(postfield, total_len+1, "%s%d\r\n\r\nuserIndex=%s", HTTP_HEADER_INFO,\
             post_len, userIndex);
 
     /* Send HTTP Request and Process the Response */
-    pthread_mutex_lock(&recv_lock);
+    for (att = 0; (ret = pthread_mutex_trylock(&recv_lock)) != 0 && att < TRYLOCK_TOTAL_ATTEMPS; ++att) sleep(TRYLOCK_INTERVAL_SECOND);
+    if (ret != 0) 
+    {
+        pthread_mutex_unlock(&post_lock);
+        return NULL;
+    }
     if (http_req(AUTH_SERVER, HTTP_PORT, postfield, total_len, receiveline, MAXLINE, 0) == 0)
     {
         pthread_mutex_unlock(&post_lock);
