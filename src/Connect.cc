@@ -250,7 +250,6 @@ static int http_req(const char* server_addr, const uint16_t port, const char* ht
     if (connect_err(socketd, (struct sockaddr*)&servaddr, sizeof(struct sockaddr_in)) < 0)
         return -1;
     /* Write to the Socket */
-    printf("here %x\n", pthread_self());
     while (nleft > 0) 
     {
         if ((processed = write(socketd, wrptr, nleft)) < 0)
@@ -265,7 +264,6 @@ static int http_req(const char* server_addr, const uint16_t port, const char* ht
         nleft -= processed;
         wrptr += processed;
     }
-    printf("here %x\n", pthread_self());
     (void)shutdown(socketd, SHUT_WR);
     nleft = max_receive;
     /* Read from the Socket */
@@ -275,7 +273,6 @@ static int http_req(const char* server_addr, const uint16_t port, const char* ht
         nleft -= processed;
     }
     *rdptr = '\0';
-    printf("here %x\n", pthread_self());
     if (f_close)
         (void)shutdown(socketd, SHUT_RD);
     return 0;
