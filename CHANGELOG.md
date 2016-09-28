@@ -1,3 +1,6 @@
+### v0.4.1
+- Adjusted POST fields.
+
 ## v0.4
 - Adjusted mutex lock policy to avoid a majority of uncleaned threads in case of slow connection.
 - A much shorter timeout time is used.
